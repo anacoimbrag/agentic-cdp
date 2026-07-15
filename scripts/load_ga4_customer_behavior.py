@@ -5,12 +5,33 @@ dia por vez, filtrando pelos user_pseudo_id dos clientes conhecidos, e grava
 apenas o resultado agregado em raw.ga4_customer_behavior e em
 raw.ga4_promotion_engagement (exposição a campanha por cliente, usada pelo
 modelo de propensão de campanha).
+
+Carga incremental: a etapa cara (ler e filtrar o JSON bruto) usa um cursor
+de 1 linha (raw._ga4_customer_events_scan_state) pra saber até que data de
+arquivo já foi escaneado, e só processa arquivos posteriores a ela (a data
+está no nome do arquivo, events_YYYYMMDD.json.gz). O cursor marca "já
+escaneei", não "achei match" -- não dá pra derivar isso de
+max(event_date) na própria tabela filtrada porque nos dados reais os
+primeiros ~422 dos 722 dias não têm nenhum evento de cliente conhecido
+(os clientes só passam a aparecer no GA4 a partir de set/2025); sem o
+cursor, esses dias sem match seriam re-escaneados do zero em toda
+execução. raw._ga4_customer_events_filtered persiste entre execuções em
+vez de ser recriada, e a agregação final (barata, já opera só sobre
+eventos filtrados) é sempre recalculada por completo a partir dela.
+
+Limitação: um cliente que só passou a existir em raw.cdp_customer_profiles
+depois que seus dias de evento já foram processados não terá esses eventos
+antigos retroativamente incluídos (eles foram descartados no filtro daquela
+execução). Rode com FORCE_RELOAD=1 pra reprocessar tudo do zero quando isso
+importar (ex.: import retroativo de clientes) ou quando a lógica de
+agregação abaixo mudar.
 """
 
 from __future__ import annotations
 
 import glob
 import os
+import re
 import sys
 
 import duckdb
@@ -18,6 +39,16 @@ import duckdb
 WAREHOUSE_PATH = os.environ.get("WAREHOUSE_PATH", "/output/warehouse.duckdb")
 SOURCE_GLOB = os.environ.get("GA4_SOURCE_GLOB", "/ga4_source/events/events_*.json.gz")
 MAX_DAYS = int(os.environ["MAX_DAYS"]) if os.environ.get("MAX_DAYS") else None
+FORCE_RELOAD = os.environ.get("FORCE_RELOAD") == "1"
+
+FILENAME_DATE_RE = re.compile(r"(\d{8})")
+
+
+def file_date(path: str) -> str:
+    match = FILENAME_DATE_RE.search(os.path.basename(path))
+    if not match:
+        raise ValueError(f"Could not find a YYYYMMDD date in filename: {path}")
+    return match.group(1)
 
 
 def main() -> int:
@@ -25,24 +56,24 @@ def main() -> int:
     if not files:
         print(f"No files matched {SOURCE_GLOB}", file=sys.stderr)
         return 1
-    if MAX_DAYS:
-        files = files[:MAX_DAYS]
 
     con = duckdb.connect(WAREHOUSE_PATH)
     con.execute("CREATE SCHEMA IF NOT EXISTS raw")
 
-    customer_count = con.execute(
-        "SELECT count(*) FROM raw.cdp_customer_profiles"
-    ).fetchone()[0]
-    print(
-        f"Filtering {len(files)} day(s) ({files[0]} .. {files[-1]}) down to "
-        f"{customer_count} known customer user_pseudo_ids...",
-        flush=True,
-    )
+    if FORCE_RELOAD:
+        con.execute("DROP TABLE IF EXISTS raw._ga4_customer_events_filtered")
+        con.execute("DROP TABLE IF EXISTS raw._ga4_customer_events_scan_state")
 
-    con.execute("DROP TABLE IF EXISTS raw._ga4_customer_events_filtered")
     con.execute("""
-        CREATE TABLE raw._ga4_customer_events_filtered AS
+        CREATE TABLE IF NOT EXISTS raw._ga4_customer_events_scan_state (
+            last_scanned_date VARCHAR
+        )
+    """)
+    if con.execute("SELECT count(*) FROM raw._ga4_customer_events_scan_state").fetchone()[0] == 0:
+        con.execute("INSERT INTO raw._ga4_customer_events_scan_state VALUES (NULL)")
+
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS raw._ga4_customer_events_filtered AS
         with customer_ids as (
             select distinct identity_userpseudoid as user_pseudo_id
             from raw.cdp_customer_profiles
@@ -66,6 +97,29 @@ def main() -> int:
         from customer_ids
         where false
     """)
+
+    watermark = con.execute(
+        "SELECT last_scanned_date FROM raw._ga4_customer_events_scan_state"
+    ).fetchone()[0]
+    if watermark:
+        files = [f for f in files if file_date(f) > watermark]
+    if MAX_DAYS:
+        files = files[:MAX_DAYS]
+
+    if not files:
+        print(f"raw._ga4_customer_events_filtered already up to date (watermark={watermark}). "
+              f"Nothing to do.", flush=True)
+        return 0
+
+    customer_count = con.execute(
+        "SELECT count(*) FROM raw.cdp_customer_profiles"
+    ).fetchone()[0]
+    print(
+        f"Filtering {len(files)} new day(s) ({files[0]} .. {files[-1]}) down to "
+        f"{customer_count} known customer user_pseudo_ids. "
+        f"Watermark before this run: {watermark or 'none'}...",
+        flush=True,
+    )
 
     for i, f in enumerate(files):
         con.execute(f"""
@@ -95,6 +149,11 @@ def main() -> int:
             ).fetchone()[0]
             print(f"[{i + 1}/{len(files)}] {os.path.basename(f)}: "
                   f"{running_total} matching rows so far", flush=True)
+
+    con.execute(
+        "UPDATE raw._ga4_customer_events_scan_state SET last_scanned_date = ?",
+        [file_date(files[-1])],
+    )
 
     total_matched = con.execute(
         "SELECT count(*) FROM raw._ga4_customer_events_filtered"
@@ -221,8 +280,6 @@ def main() -> int:
         from promo_events
         group by 1, 2
     """)
-
-    con.execute("DROP TABLE raw._ga4_customer_events_filtered")
 
     total = con.execute("SELECT count(*) FROM raw.ga4_customer_behavior").fetchone()[0]
     promo_total = con.execute("SELECT count(*) FROM raw.ga4_promotion_engagement").fetchone()[0]
