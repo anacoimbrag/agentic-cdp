@@ -99,3 +99,15 @@ models:
     columns:
       - name: user_pseudo_id
         tests: [not_null, unique]
+
+  - name: stg_ga4_site_traffic
+    description: >
+      Uma linha por dia × plataforma × mídia, com contagem de sessões e de
+      sessões com compra para todos os visitantes do GA4 (não filtrado por
+      cliente conhecido). Base para a taxa de conversão real em
+      `fct_site_traffic`.
+    columns:
+      - name: traffic_date
+        tests: [not_null]
+      - name: sessions
+        tests: [not_null]

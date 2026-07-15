@@ -20,6 +20,17 @@ services:
       - ./output:/output
       - ../ga4_bigquery_export:/ga4_source:ro
 
+  ga4-site-traffic-loader:
+    build: ./scripts
+    command: ["python", "load_ga4_site_traffic.py"]
+    env_file:
+      - .env
+    environment:
+      - WAREHOUSE_PATH=/output/warehouse.duckdb
+    volumes:
+      - ./output:/output
+      - ../ga4_bigquery_export:/ga4_source:ro
+
   dbt:
     build: ./transform
     environment:

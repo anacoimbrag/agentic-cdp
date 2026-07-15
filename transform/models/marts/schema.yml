@@ -147,6 +147,31 @@ models:
                 to: ref('dim_date')
                 field: order_date
 
+  - name: fct_site_traffic
+    description: >
+      Uma linha por dia × canal × mídia de tráfego, agregada a partir de
+      todas as sessões do GA4 (não só clientes conhecidos do CDP). Mede
+      `sessions` e `purchasing_sessions` para calcular a taxa de conversão
+      real (sessão → compra), incluindo visitantes anônimos. `channel_id`
+      só cobre Site e App: o GA4 da loja não rastreia compras feitas dentro
+      do Marketplace.
+    columns:
+      - name: traffic_date
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: order_date
+      - name: channel_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_channel')
+                field: channel_id
+      - name: sessions
+        tests: [not_null]
+
   - name: fct_order_line
     description: >
       Uma linha por item de pedido (grão de linha). Contém as métricas de
