@@ -150,9 +150,10 @@ models:
   - name: fct_site_traffic
     description: >
       Uma linha por dia × canal × mídia de tráfego, agregada a partir de
-      todas as sessões do GA4 (não só clientes conhecidos do CDP). Mede
-      `sessions` e `purchasing_sessions` para calcular a taxa de conversão
-      real (sessão → compra), incluindo visitantes anônimos. `channel_id`
+      todas as sessões do GA4 (não só clientes conhecidos do CDP). Modela o
+      funil de vendas em 3 etapas — `sessions` → `cart_sessions`
+      (`add_to_cart`) → `purchasing_sessions` (`purchase`) — com as taxas de
+      conversão entre cada etapa, incluindo visitantes anônimos. `channel_id`
       só cobre Site e App: o GA4 da loja não rastreia compras feitas dentro
       do Marketplace.
     columns:
@@ -171,6 +172,18 @@ models:
                 field: channel_id
       - name: sessions
         tests: [not_null]
+      - name: cart_sessions
+        description: Sessões com pelo menos um evento `add_to_cart` (etapa 2 do funil).
+        tests: [not_null]
+      - name: purchasing_sessions
+        description: Sessões com pelo menos um evento `purchase` (etapa 3 do funil).
+        tests: [not_null]
+      - name: cart_conversion_rate
+        description: "`cart_sessions / sessions` — conversão da etapa 1 para a etapa 2."
+      - name: checkout_conversion_rate
+        description: "`purchasing_sessions / cart_sessions` — conversão da etapa 2 para a etapa 3."
+      - name: conversion_rate
+        description: "`purchasing_sessions / sessions` — conversão geral da etapa 1 para a etapa 3."
 
   - name: fct_order_line
     description: >

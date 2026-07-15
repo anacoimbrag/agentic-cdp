@@ -11,6 +11,7 @@ select
     end as channel_id,
     coalesce(medium, '(not set)') as medium,
     sessions,
+    cart_sessions,
     purchasing_sessions,
     visitors
 from {{ source('raw', 'ga4_site_traffic') }}
