@@ -1,7 +1,5 @@
 .meltano/
 metabase/data/
-output/*.duckdb
-output/*.duckdb.wal
 output/*.sqlite
 logs/
 *.log

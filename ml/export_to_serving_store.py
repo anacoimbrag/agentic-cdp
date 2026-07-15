@@ -1,6 +1,6 @@
 """Publica os resultados finais de ML (já materializados pelo dbt em
 activation.*) num arquivo SQLite de leitura, pra API (ml/api/) consumir sem
-disputar o DuckDB (single-file) com o dbt/treino.
+disputar o ClickHouse com o dbt/treino.
 
 Não reprocessa nada, só copia tabelas já prontas. Rode depois do `dbt build` completo (a versão
 que já materializou customer_profile/customer_showcase com as colunas de
@@ -28,10 +28,8 @@ CUSTOMER_SHOWCASE_COLUMNS = [
 ]
 
 
-def export_table(duck_con, sqlite_con, source_table: str, columns: list[str], dest_table: str) -> int:
-    rows = duck_con.execute(
-        f"SELECT {', '.join(columns)} FROM {source_table}"
-    ).fetchall()
+def export_table(ch_client, sqlite_con, source_table: str, columns: list[str], dest_table: str) -> int:
+    rows = ch_client.query(f"SELECT {', '.join(columns)} FROM {source_table}").result_rows
 
     placeholders = ", ".join(columns)
     sqlite_con.execute(f"DROP TABLE IF EXISTS {dest_table}")
@@ -44,7 +42,7 @@ def export_table(duck_con, sqlite_con, source_table: str, columns: list[str], de
 
 
 def main() -> int:
-    duck_con = connect(read_only=True)
+    ch_client = connect()
 
     os.makedirs(os.path.dirname(SQLITE_PATH) or ".", exist_ok=True)
     if os.path.exists(SQLITE_PATH):
@@ -52,11 +50,11 @@ def main() -> int:
     sqlite_con = sqlite3.connect(SQLITE_PATH)
 
     n_profiles = export_table(
-        duck_con, sqlite_con, "activation.customer_profile",
+        ch_client, sqlite_con, "activation.customer_profile",
         CUSTOMER_PROFILE_COLUMNS, "customer_profile",
     )
     n_showcase = export_table(
-        duck_con, sqlite_con, "activation.customer_showcase",
+        ch_client, sqlite_con, "activation.customer_showcase",
         CUSTOMER_SHOWCASE_COLUMNS, "customer_showcase",
     )
 

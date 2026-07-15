@@ -40,16 +40,22 @@ plugins:
             primary_keys: [orderId]
 
   loaders:
-    - name: target-duckdb
-      variant: meltanolabs
-      pip_url: git+https://github.com/MeltanoLabs/target-duckdb.git
+    - name: target-clickhouse
+      variant: shaped-ai
+      pip_url: git+https://github.com/shaped-ai/target-clickhouse.git
       config:
-        path: ${MELTANO_PROJECT_ROOT}/output/warehouse.duckdb
+        host: ${CLICKHOUSE_HOST}
+        port: ${CLICKHOUSE_PORT}
+        username: ${CLICKHOUSE_USER}
+        password: ${CLICKHOUSE_PASSWORD}
+        database: ${CLICKHOUSE_DATABASE}
         default_target_schema: raw
-        # cdp_customer_profiles não tem chave primária plana; landing zone é append-only.
-        primary_key_required: false
+        # load_method default (append-only) já cobre o caso de
+        # cdp_customer_profiles, que não tem chave primária plana; a
+        # landing zone é append-only pra todas as streams, staging dedupe
+        # via row_number().
 
 jobs:
   - name: el_ecomm_data
     tasks:
-      - tap-rest-api-msdk target-duckdb
+      - tap-rest-api-msdk target-clickhouse

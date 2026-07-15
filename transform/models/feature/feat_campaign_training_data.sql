@@ -1,3 +1,4 @@
+{{ config(order_by=['customer_id', 'promotion_id']) }}
 -- Feature/label view para ml/campaigns/train_propensity.py. Grão: 1 linha
 -- por (customer_id, promotion_id) com exposição registrada (view/select de
 -- promoção no GA4). O rótulo `converted` vem do uso real do cupom em
@@ -48,17 +49,17 @@ conversions as (
 )
 
 select
-    e.customer_id,
+    e.customer_id as customer_id,
     e.promotion_slug as promotion_id,
-    e.view_count,
-    e.select_count,
-    date_diff('day', e.last_seen_at, current_timestamp) as days_since_last_exposure,
+    e.view_count as view_count,
+    e.select_count as select_count,
+    dateDiff('day', e.last_seen_at, now()) as days_since_last_exposure,
     coalesce(r.recency_days, 999999) as recency_days,
     coalesce(r.total_orders, 0) as total_orders,
     coalesce(r.net_revenue, 0) as net_revenue,
-    r.avg_order_value,
-    fc.favorite_category,
-    fb.favorite_brand,
+    r.avg_order_value as avg_order_value,
+    fc.favorite_category as favorite_category,
+    fb.favorite_brand as favorite_brand,
     c.promotion_id is not null as converted
 from exposure e
 left join rfm r on e.customer_id = r.customer_id

@@ -1,9 +1,10 @@
+{{ config(order_by=['product_id_a', 'product_id_b']) }}
 -- Market basket puro em SQL (sem ML): "quem comprou X também comprou Y",
 -- agregado por product_id (não sku_id, pra não fragmentar variações de
 -- tamanho/cor do mesmo produto em pares diferentes). Consumida por
 -- customer_showcase.sql como um dos 3 sinais de recomendação.
 with order_products as (
-    select distinct order_id, product_id
+    select distinct order_id, assumeNotNull(product_id) as product_id
     from {{ ref('fct_order_line') }}
     where product_id is not null
 ),
@@ -21,7 +22,7 @@ pairs as (
     select
         a.product_id as product_id_a,
         b.product_id as product_id_b,
-        a.order_id
+        a.order_id as order_id
     from order_products a
     inner join order_products b
         on a.order_id = b.order_id and a.product_id != b.product_id
@@ -47,9 +48,9 @@ total_orders as (
 )
 
 select
-    co.product_id_a,
-    co.product_id_b,
-    co.co_occurrence_count,
+    co.product_id_a as product_id_a,
+    co.product_id_b as product_id_b,
+    co.co_occurrence_count as co_occurrence_count,
     co.co_occurrence_count::double / t.n_orders as support,
     co.co_occurrence_count::double / poa.order_count as confidence_a_to_b,
     (co.co_occurrence_count::double / poa.order_count)

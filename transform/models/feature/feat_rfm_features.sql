@@ -1,3 +1,4 @@
+{{ config(order_by=['customer_id']) }}
 -- Feature view para ml/segmentation/train_kmeans.py. Recalcula RFM direto das
 -- staging sources (não a partir de activation.customer_profile) para não
 -- criar uma dependência circular entre o model que consome o output do
@@ -26,11 +27,11 @@ refund_agg as (
 )
 
 select
-    p.customer_id,
+    p.customer_id as customer_id,
     coalesce(oa.total_orders, 0) as total_orders,
     coalesce(oa.total_revenue, 0) - coalesce(ra.total_refund_value, 0) as net_revenue,
-    oa.avg_order_value,
-    date_diff('day', oa.last_purchase_at, current_timestamp) as recency_days,
+    oa.avg_order_value as avg_order_value,
+    dateDiff('day', oa.last_purchase_at, now()) as recency_days,
     oa.total_orders is not null and oa.total_orders > 0 as has_purchase_history
 from profiles p
 left join order_agg oa on p.customer_id = oa.customer_id

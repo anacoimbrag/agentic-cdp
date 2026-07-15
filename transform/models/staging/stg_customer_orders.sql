@@ -2,7 +2,7 @@
 select
     orderid as order_id,
     clientid as customer_id,
-    try_cast(authorizeddate as timestamp) as purchased_at,
+    {{ try_cast('authorizeddate', 'timestamp') }} as purchased_at,
     totalvalue as revenue,
     shippingvalue as shipping_value,
     taxvalue as tax_value,

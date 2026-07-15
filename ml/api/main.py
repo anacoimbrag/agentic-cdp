@@ -1,6 +1,6 @@
 """API REST que expõe os 3 casos de uso de ML do CDP (segmentação, próxima
 campanha, vitrine personalizada). Lê só de output/serving_store.sqlite,
-gravado por ml/export_to_serving_store.py — nunca do DuckDB diretamente.
+gravado por ml/export_to_serving_store.py — nunca do ClickHouse diretamente.
 """
 
 from fastapi import FastAPI

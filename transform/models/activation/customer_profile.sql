@@ -1,3 +1,4 @@
+{{ config(order_by=['customer_id']) }}
 with profiles as (
     select * from {{ ref('stg_cdp_customer_profiles') }}
 ),
@@ -73,9 +74,9 @@ segments as (
 --    recente, como último recurso.
 propensity_ranked as (
     select
-        cp.customer_id,
-        cp.promotion_id,
-        cp.propensity_score,
+        cp.customer_id as customer_id,
+        cp.promotion_id as promotion_id,
+        cp.propensity_score as propensity_score,
         cp.propensity_score * coalesce(r.avg_order_value, 0) as expected_value,
         row_number() over (
             partition by cp.customer_id
@@ -94,9 +95,9 @@ best_propensity as (
 
 segment_fallback_ranked as (
     select
-        s.customer_id,
-        sca.promotion_id,
-        sca.conversion_rate,
+        s.customer_id as customer_id,
+        sca.promotion_id as promotion_id,
+        sca.conversion_rate as conversion_rate,
         row_number() over (
             partition by s.customer_id
             order by sca.rank_in_segment
@@ -132,7 +133,7 @@ most_recent_active_promotion as (
 
 next_best_campaign as (
     select
-        p.customer_id,
+        p.customer_id as customer_id,
         coalesce(bp.promotion_id, bsf.promotion_id, ofb.promotion_id, mrap.promotion_id)
             as promotion_id,
         coalesce(bp.score, bsf.score, ofb.score) as score,
@@ -150,54 +151,54 @@ next_best_campaign as (
 )
 
 select
-    p.customer_id,
-    p.user_pseudo_id,
-    p.first_name,
-    p.last_name,
-    p.full_name,
-    p.document_id,
-    p.document_type,
-    p.gender,
-    p.birth_date,
-    p.age,
-    p.language_preference,
-    p.email_opt_in,
-    p.sms_opt_in,
-    p.push_opt_in,
-    p.whatsapp_opt_in,
-    p.primary_email,
-    p.email_verified,
-    p.has_verified_phone,
-    b.location_country,
-    b.location_region,
-    b.location_city,
-    b.preferred_device_category,
-    b.viewed_top_category,
-    b.viewed_top_brand,
+    p.customer_id as customer_id,
+    p.user_pseudo_id as user_pseudo_id,
+    p.first_name as first_name,
+    p.last_name as last_name,
+    p.full_name as full_name,
+    p.document_id as document_id,
+    p.document_type as document_type,
+    p.gender as gender,
+    p.birth_date as birth_date,
+    p.age as age,
+    p.language_preference as language_preference,
+    p.email_opt_in as email_opt_in,
+    p.sms_opt_in as sms_opt_in,
+    p.push_opt_in as push_opt_in,
+    p.whatsapp_opt_in as whatsapp_opt_in,
+    p.primary_email as primary_email,
+    p.email_verified as email_verified,
+    p.has_verified_phone as has_verified_phone,
+    b.location_country as location_country,
+    b.location_region as location_region,
+    b.location_city as location_city,
+    b.preferred_device_category as preferred_device_category,
+    b.viewed_top_category as viewed_top_category,
+    b.viewed_top_brand as viewed_top_brand,
     b.total_events as ga4_total_events,
     b.distinct_days_active as ga4_distinct_days_active,
-    b.ga4_first_seen_at,
-    b.ga4_last_seen_at,
+    b.ga4_first_seen_at as ga4_first_seen_at,
+    b.ga4_last_seen_at as ga4_last_seen_at,
     coalesce(oa.total_orders, 0) as total_orders,
     coalesce(oa.total_revenue, 0) as total_revenue,
-    oa.avg_order_value,
-    oa.first_purchase_at,
-    oa.last_purchase_at,
-    date_diff('day', oa.last_purchase_at, current_timestamp) as recency_days,
+    oa.avg_order_value as avg_order_value,
+    oa.first_purchase_at as first_purchase_at,
+    oa.last_purchase_at as last_purchase_at,
+    dateDiff('day', oa.last_purchase_at, now()) as recency_days,
     coalesce(ra.total_refunds, 0) as total_refunds,
     coalesce(ra.total_refund_value, 0) as total_refund_value,
     coalesce(oa.total_revenue, 0) - coalesce(ra.total_refund_value, 0) as net_revenue,
-    fc.favorite_category,
-    fb.favorite_brand,
-    s.cluster_id,
+    fc.favorite_category as favorite_category,
+    fb.favorite_brand as favorite_brand,
+    s.cluster_id as cluster_id,
     coalesce(s.segment_label, 'no_purchase') as segment_label,
-    s.tier,
-    s.segmented_at,
+    s.tier as tier,
+    s.segmented_at as segmented_at,
     nbc.promotion_id as next_best_promotion_id,
     dp.promotion_name as next_best_promotion_name,
     nbc.score as next_best_campaign_score,
     nbc.reason as next_best_campaign_reason,
-    current_timestamp as campaign_scored_at
+    now() as campaign_scored_at
 from profiles p
 left join behavior b on p.user_pseudo_id = b.user_pseudo_id
 left join order_agg oa on p.customer_id = oa.customer_id

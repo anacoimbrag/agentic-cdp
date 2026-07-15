@@ -1,3 +1,4 @@
+{{ config(order_by=['channel_id']) }}
 -- Um registro por canal de venda (1 Site, 2 App, 4 Marketplace).
 select
     channel_id,

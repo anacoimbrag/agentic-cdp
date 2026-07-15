@@ -1,3 +1,4 @@
+{{ config(order_by=['promotion_id']) }}
 select
     -- utm_campaign é a chave natural referenciada por fct_customer_orders.coupon.
     utm_campaign as promotion_id,

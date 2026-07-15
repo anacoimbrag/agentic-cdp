@@ -2,6 +2,17 @@ agentic_cdp:
   target: dev
   outputs:
     dev:
-      type: duckdb
-      path: "{{ env_var('WAREHOUSE_PATH', '/output/warehouse.duckdb') }}"
+      type: clickhouse
+      host: "{{ env_var('CLICKHOUSE_HOST', 'clickhouse') }}"
+      port: "{{ env_var('CLICKHOUSE_PORT', '8123') | as_number }}"
+      user: "{{ env_var('CLICKHOUSE_USER', 'default') }}"
+      password: "{{ env_var('CLICKHOUSE_PASSWORD', '') }}"
       schema: main
+      secure: false
+      # LEFT JOIN sem match no ClickHouse por padrão preenche colunas String
+      # com '' (não NULL) -- diferente do DuckDB. Isso quebra os vários
+      # coalesce(x, default) usados nos modelos (customer_profile,
+      # feat_customer_segment_labels etc). join_use_nulls restaura o
+      # comportamento padrão de SQL (NULL em vez de valor default do tipo).
+      custom_settings:
+        join_use_nulls: 1

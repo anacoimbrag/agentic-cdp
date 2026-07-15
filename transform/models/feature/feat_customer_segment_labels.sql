@@ -1,3 +1,4 @@
+{{ config(order_by=['customer_id']) }}
 -- Traduz raw.customer_clusters (cluster_id cru, saída do K-Means) em rótulos
 -- de negócio (segment_label/tier). Fica em feature/, não em activation/,
 -- porque tem dois consumidores que não podem depender um do outro:
@@ -11,7 +12,7 @@
 -- qualquer k que o K-Means escolher (3 a 8, ver ml/segmentation/train_kmeans.py).
 with cluster_stats as (
     select
-        cc.cluster_id,
+        cc.cluster_id as cluster_id,
         avg(f.net_revenue) as avg_net_revenue
     from {{ source('raw', 'customer_clusters') }} cc
     inner join {{ ref('feat_rfm_features') }} f on cc.customer_id = f.customer_id
@@ -31,7 +32,7 @@ ranked_clusters as (
 
 labeled_clusters as (
     select
-        rc.cluster_id,
+        rc.cluster_id as cluster_id,
         ['Champions', 'Loyal', 'Promising', 'At Risk', 'Hibernating', 'Lost'][
             least(6, 1 + cast(floor((rc.value_rank - 1) * 6.0 / cc.k) as integer))
         ] as segment_label
@@ -48,11 +49,11 @@ tiers as (
 )
 
 select
-    cc.customer_id,
-    cc.cluster_id,
-    lc.segment_label,
+    cc.customer_id as customer_id,
+    cc.cluster_id as cluster_id,
+    lc.segment_label as segment_label,
     case t.tier_bucket when 1 then 'Gold' when 2 then 'Silver' else 'Bronze' end as tier,
-    current_timestamp as segmented_at
+    now() as segmented_at
 from {{ source('raw', 'customer_clusters') }} cc
 left join labeled_clusters lc on cc.cluster_id = lc.cluster_id
 left join tiers t on cc.customer_id = t.customer_id

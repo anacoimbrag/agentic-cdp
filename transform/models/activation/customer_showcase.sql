@@ -1,3 +1,4 @@
+{{ config(order_by=['customer_id', 'rank']) }}
 -- Vitrine inteligente personalizada (caso de uso 3): top-12 produtos por
 -- cliente, combinando 3 sinais em SQL puro (regra de scoring do plano):
 -- 1) similaridade de produto (ml/recommendations/train_item_similarity.py),
@@ -14,11 +15,11 @@ with purchased as (
 
 similarity_candidates as (
     select
-        p.customer_id,
+        p.customer_id as customer_id,
         sim.product_id_b as product_id,
         max(
             sim.similarity_score
-            * exp(-date_diff('day', p.last_purchased_at, current_timestamp) / 90.0)
+            * exp(-dateDiff('day', p.last_purchased_at, now()) / 90.0)
         ) as score
     from purchased p
     inner join {{ source('raw', 'product_similarity') }} sim
@@ -31,7 +32,7 @@ similarity_candidates as (
 
 basket_candidates as (
     select
-        p.customer_id,
+        p.customer_id as customer_id,
         pa.product_id_b as product_id,
         max((pa.lift / (1 + pa.lift)) * pa.confidence_a_to_b) as score
     from purchased p
@@ -53,8 +54,8 @@ max_popularity as (
 ),
 content_candidates as (
     select
-        cp.customer_id,
-        pp.product_id,
+        cp.customer_id as customer_id,
+        pp.product_id as product_id,
         (pp.order_count::double / mp.max_order_count) * 0.5 as score
     from {{ ref('customer_profile') }} cp
     inner join product_popularity pp
@@ -111,13 +112,13 @@ ranked as (
 )
 
 select
-    r.customer_id,
-    r.rank,
-    r.product_id,
-    rs.sku_id,
-    r.reason,
-    r.score,
-    current_timestamp as computed_at
+    r.customer_id as customer_id,
+    r.rank as rank,
+    r.product_id as product_id,
+    rs.sku_id as sku_id,
+    r.reason as reason,
+    r.score as score,
+    now() as computed_at
 from ranked r
 left join representative_sku rs on r.product_id = rs.product_id
 where r.rank <= 12

@@ -1,3 +1,4 @@
+{{ config(order_by=['segment_label', 'promotion_id']) }}
 -- "O que funciona melhor por segmento" calculado a partir do histórico real
 -- de conversão (uso de cupom em fct_order_line), não de uma tabela de
 -- regras escrita à mão. Grão: 1 linha por (segment_label, promotion_id).
@@ -19,8 +20,8 @@ total_customers as (
 
 conversions as (
     select
-        s.segment_label,
-        o.promotion_id,
+        s.segment_label as segment_label,
+        o.promotion_id as promotion_id,
         count(distinct o.customer_id) as distinct_customers_converted
     from {{ ref('fct_order_line') }} o
     inner join {{ ref('feat_customer_segment_labels') }} s on o.customer_id = s.customer_id
@@ -46,19 +47,19 @@ overall_ranked as (
 )
 
 select
-    c.segment_label,
-    c.promotion_id,
-    c.distinct_customers_converted,
-    ss.segment_customer_count,
+    assumeNotNull(c.segment_label) as segment_label,
+    assumeNotNull(c.promotion_id) as promotion_id,
+    c.distinct_customers_converted as distinct_customers_converted,
+    ss.segment_customer_count as segment_customer_count,
     c.distinct_customers_converted::double / ss.segment_customer_count as conversion_rate,
     row_number() over (
         partition by c.segment_label
         order by c.distinct_customers_converted::double / ss.segment_customer_count desc
     ) as rank_in_segment,
-    orank.overall_customers_converted,
-    tc.overall_customer_count,
+    orank.overall_customers_converted as overall_customers_converted,
+    tc.overall_customer_count as overall_customer_count,
     orank.overall_customers_converted::double / tc.overall_customer_count as overall_conversion_rate,
-    orank.rank_overall
+    orank.rank_overall as rank_overall
 from conversions c
 inner join segment_sizes ss on c.segment_label = ss.segment_label
 inner join overall_ranked orank on c.promotion_id = orank.promotion_id

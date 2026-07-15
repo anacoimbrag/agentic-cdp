@@ -6,7 +6,7 @@ select
     brand,
     brandid as brand_id,
     link,
-    try_cast(categoryid as integer) as category_id,
+    {{ try_cast('categoryid', 'integer') }} as category_id,
     pricerange_listprice_lowprice as list_price_low,
     pricerange_listprice_highprice as list_price_high,
     pricerange_sellingprice_lowprice as selling_price_low,

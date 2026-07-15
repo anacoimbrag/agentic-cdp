@@ -7,7 +7,7 @@
   {% if execute %}
     {% set failures = results | selectattr("status", "in", ["error", "fail", "skipped"]) | list %}
     {% if failures | length == 0 %}
-      {% do run_query("DROP SCHEMA IF EXISTS raw CASCADE") %}
+      {% do run_query("DROP DATABASE IF EXISTS raw") %}
     {% endif %}
   {% endif %}
 {% endmacro %}

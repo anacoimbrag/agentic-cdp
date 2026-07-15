@@ -38,7 +38,7 @@ docker compose run --rm dbt build
 # 4. Publica os resultados finais num SQLite de leitura pra API consumir
 docker compose run --rm ml-export
 
-# 5. Sobe a API (lê só output/serving_store.sqlite, nunca o DuckDB)
+# 5. Sobe a API (lê só output/serving_store.sqlite, nunca o ClickHouse)
 docker compose up -d ml-api
 ```
 

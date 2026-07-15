@@ -1,3 +1,4 @@
+{{ config(order_by=['customer_id', 'product_id']) }}
 -- Feature view para ml/recommendations/train_item_similarity.py: matriz
 -- implícita cliente x produto (grão: 1 linha por customer_id x product_id
 -- com interação). O peso vem só de compras reais (fct_order_line) — o
@@ -8,7 +9,7 @@
 -- em activation/customer_showcase.sql.
 select
     customer_id,
-    product_id,
+    assumeNotNull(product_id) as product_id,
     sum(quantity) as interaction_weight
 from {{ ref('fct_order_line') }}
 where product_id is not null

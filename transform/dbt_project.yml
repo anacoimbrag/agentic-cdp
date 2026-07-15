@@ -15,12 +15,15 @@ models:
     feature:
       +materialized: table
       +schema: feature
+      +engine: MergeTree
     marts:
       +materialized: table
       +schema: marts
+      +engine: MergeTree
     activation:
       +materialized: table
       +schema: activation
+      +engine: MergeTree
 
 # Descarta o schema raw ao final de um build bem-sucedido. Desativado.
 # on-run-end:

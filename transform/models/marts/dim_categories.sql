@@ -1,3 +1,4 @@
+{{ config(order_by=['category_id']) }}
 select
     category_id,
     category_name,

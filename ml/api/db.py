@@ -1,6 +1,6 @@
 """Conexão read-only ao output/serving_store.sqlite (gravado por
-ml/export_to_serving_store.py). A API nunca lê o DuckDB diretamente — evita
-disputar o warehouse single-file com o dbt/treino.
+ml/export_to_serving_store.py). A API nunca lê o ClickHouse diretamente —
+evita disputar o warehouse com o dbt/treino.
 """
 
 from __future__ import annotations

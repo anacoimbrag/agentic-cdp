@@ -1,3 +1,4 @@
+{{ config(order_by=['customer_id']) }}
 -- Dimensão analítica: recorte não-identificável de customer_profile, sem PII
 -- (nome, documento, e-mail, data de nascimento exata). Uso em BI/agregações.
 select
