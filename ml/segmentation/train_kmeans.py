@@ -1,14 +1,4 @@
-"""Clusterização dinâmica de clientes (caso de uso 1).
-
-Lê feature.feat_rfm_features (materializada pelo dbt), roda K-Means sobre
-RFM padronizado escolhendo k por silhouette score, e grava só o cluster_id
-cru em raw.customer_clusters — rotular o cluster (Champions/Loyal/etc.) é
-regra de negócio e fica em SQL, dentro de
-transform/models/activation/customer_profile.sql.
-
-Rodar depois de `dbt build --select path:models/feature` e antes do
-`dbt build` completo (ver README do módulo ml/).
-"""
+"""K-Means sobre RFM para clusterização dinâmica de clientes."""
 
 from __future__ import annotations
 
@@ -21,70 +11,59 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
+# permite `from common.db import ...` quando o script roda direto (python segmentation/train_kmeans.py)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from common.db import connect  # noqa: E402
+from common.db import connect, fetch_dicts, replace_table  # noqa: E402
 
 K_MIN = int(os.environ.get("KMEANS_K_MIN", "3"))
 K_MAX = int(os.environ.get("KMEANS_K_MAX", "8"))
 RANDOM_STATE = 42
 
 
+def pick_best_k(features: np.ndarray, k_min: int, k_max: int) -> int:
+    silhouette_by_k = {}
+    for k in range(k_min, k_max + 1):
+        labels = KMeans(n_clusters=k, random_state=RANDOM_STATE, n_init=10).fit_predict(features)
+        silhouette_by_k[k] = silhouette_score(features, labels)
+        print(f"k={k}: silhouette={silhouette_by_k[k]:.4f}", flush=True)
+    return max(silhouette_by_k, key=silhouette_by_k.get)
+
+
 def main() -> int:
     con = connect()
-    con.execute("CREATE SCHEMA IF NOT EXISTS raw")
-
-    rows = con.execute("""
+    customers = fetch_dicts(con, """
         SELECT customer_id, recency_days, total_orders, net_revenue
         FROM feature.feat_rfm_features
         WHERE has_purchase_history
-    """).fetchall()
-
-    if not rows:
+    """)
+    if not customers:
         print("Nenhum cliente com histórico de compra em feat_rfm_features.", file=sys.stderr)
         return 1
 
-    customer_ids = [r[0] for r in rows]
-    X = np.array([[r[1], r[2], r[3]] for r in rows], dtype=float)
+    rfm = np.array([[c["recency_days"], c["total_orders"], c["net_revenue"]] for c in customers])
+    rfm_scaled = StandardScaler().fit_transform(rfm)
 
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-
-    max_k = min(K_MAX, len(rows) - 1)
-    if max_k < K_MIN:
-        print(f"Poucos clientes ({len(rows)}) para testar k entre {K_MIN} e {K_MAX}; "
-              f"usando k={max_k}.", file=sys.stderr)
-        best_k = max(2, max_k)
+    max_testable_k = min(K_MAX, len(customers) - 1)
+    if max_testable_k >= K_MIN:
+        k = pick_best_k(rfm_scaled, K_MIN, max_testable_k)
     else:
-        best_k, best_score = None, -1.0
-        for k in range(K_MIN, max_k + 1):
-            labels = KMeans(n_clusters=k, random_state=RANDOM_STATE, n_init=10).fit_predict(X_scaled)
-            score = silhouette_score(X_scaled, labels)
-            print(f"k={k}: silhouette={score:.4f}", flush=True)
-            if score > best_score:
-                best_k, best_score = k, score
-        print(f"Melhor k: {best_k} (silhouette={best_score:.4f})", flush=True)
+        k = max(2, max_testable_k)
+        print(f"Poucos clientes ({len(customers)}); usando k={k} sem otimizar silhouette.",
+              file=sys.stderr)
 
-    model = KMeans(n_clusters=best_k, random_state=RANDOM_STATE, n_init=10)
-    cluster_ids = model.fit_predict(X_scaled)
+    clusters = KMeans(n_clusters=k, random_state=RANDOM_STATE, n_init=10).fit_predict(rfm_scaled)
 
     trained_at = datetime.now(timezone.utc)
-    result_rows = [
-        (customer_id, int(cluster_id), trained_at)
-        for customer_id, cluster_id in zip(customer_ids, cluster_ids)
+    rows = [
+        (customer["customer_id"], int(cluster_id), trained_at)
+        for customer, cluster_id in zip(customers, clusters)
     ]
-
-    con.execute("""
-        CREATE OR REPLACE TABLE raw.customer_clusters (
-            customer_id VARCHAR,
-            cluster_id INTEGER,
-            trained_at TIMESTAMP
-        )
-    """)
-    con.executemany(
-        "INSERT INTO raw.customer_clusters VALUES (?, ?, ?)", result_rows
+    replace_table(
+        con, "raw.customer_clusters",
+        {"customer_id": "VARCHAR", "cluster_id": "INTEGER", "trained_at": "TIMESTAMP"},
+        rows,
     )
-
-    print(f"Done. raw.customer_clusters: {len(result_rows)} linhas, k={best_k}.", flush=True)
+    print(f"raw.customer_clusters: {len(rows)} linhas, k={k}.", flush=True)
     return 0
 
 
