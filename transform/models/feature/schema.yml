@@ -6,7 +6,7 @@ models:
       Uma linha por cliente com recency/frequency/monetary recalculados
       direto das staging sources (não a partir de activation.customer_profile,
       para não criar dependência circular com o output do K-Means). Consumida
-      por ml/segmentation/train_kmeans.py.
+      por ml/training/segmentation/train_kmeans.py.
     columns:
       - name: customer_id
         tests: [not_null, unique]
@@ -26,7 +26,7 @@ models:
     description: >
       Uma linha por (customer_id, promotion_id) com exposição registrada,
       features de RFM/favoritos e o rótulo `converted` (uso real do cupom em
-      fct_order_line). Consumida por ml/campaigns/train_propensity.py.
+      fct_order_line). Consumida por ml/training/campaigns/train_propensity.py.
     columns:
       - name: customer_id
         tests: [not_null]
@@ -36,11 +36,13 @@ models:
   - name: feat_customer_segment_labels
     description: >
       Traduz raw.customer_clusters (saída crua do K-Means) em rótulos de
-      negócio (segment_label/tier), ordenando clusters por net_revenue
-      médio. Consumida por activation/customer_profile.sql e por
+      negócio (segment_label/tier), classificando cada cluster por tercil de
+      recência/frequência/valor (centroids RFM) e aplicando uma grade de
+      decisão (ex: recência baixa + frequência alta + valor alto =
+      Champions). Consumida por activation/customer_profile.sql e por
       activation/segment_campaign_affinity.sql — fica em feature/ (não em
       activation/) justamente para que esses dois não dependam um do outro.
-      Só existe depois que ml/segmentation/train_kmeans.py já rodou (não faz
+      Só existe depois que ml/training/segmentation/train_kmeans.py já rodou (não faz
       parte da 1a passagem de `dbt build --select` do pipeline batch).
     columns:
       - name: customer_id
@@ -50,7 +52,7 @@ models:
     description: >
       Matriz implícita cliente x produto (peso = quantidade comprada), grão
       1 linha por (customer_id, product_id) com pelo menos uma compra.
-      Consumida por ml/recommendations/train_item_similarity.py.
+      Consumida por ml/training/recommendations/train_item_similarity.py.
     columns:
       - name: customer_id
         tests: [not_null]

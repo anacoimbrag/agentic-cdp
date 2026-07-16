@@ -13,3 +13,8 @@ transform/dbt_packages/
 transform/logs/
 transform/.user.yml
 .claude/
+.venv-py/
+.venv-dbt/
+.venv-meltano/
+metabase/metabase.jar
+.stack-*.log

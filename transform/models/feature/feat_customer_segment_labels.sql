@@ -6,13 +6,19 @@
 -- (essa última mede conversão histórica POR segmento, então não pode
 -- depender de customer_profile, senão vira ciclo).
 --
--- Rotulagem: ordena os clusters por net_revenue médio (dense_rank desc) e
--- espalha a posição proporcionalmente sobre uma escala fixa de 6 rótulos
--- (Champions...Lost), não hardcoded para um k específico — b­ate com
--- qualquer k que o K-Means escolher (3 a 8, ver ml/segmentation/train_kmeans.py).
+-- Rotulagem: em vez de rankear só por net_revenue e espalhar numa escala fixa
+-- de 6 posições, calcula o centroid de cada cluster nas 3 dimensões RFM
+-- (recency_days, total_orders, net_revenue), posiciona cada cluster num
+-- tercil (high/mid/low) por dimensão relativo aos outros clusters do mesmo
+-- k, e aplica uma grade de decisão RFM (ex: recência baixa + frequência alta
+-- + valor alto = Champions). O nome passa a refletir o comportamento real do
+-- cluster, não só sua posição num rank de receita — e continua batendo com
+-- qualquer k que o K-Means escolher (3 a 8, ver ml/training/segmentation/train_kmeans.py).
 with cluster_stats as (
     select
         cc.cluster_id as cluster_id,
+        avg(f.recency_days) as avg_recency_days,
+        avg(f.total_orders) as avg_total_orders,
         avg(f.net_revenue) as avg_net_revenue
     from {{ source('raw', 'customer_clusters') }} cc
     inner join {{ ref('feat_rfm_features') }} f on cc.customer_id = f.customer_id
@@ -25,19 +31,46 @@ cluster_count as (
 
 ranked_clusters as (
     select
+        cs.cluster_id as cluster_id,
+        dense_rank() over (order by cs.avg_recency_days asc) as recency_rank,
+        dense_rank() over (order by cs.avg_total_orders desc) as frequency_rank,
+        dense_rank() over (order by cs.avg_net_revenue desc) as monetary_rank
+    from cluster_stats cs
+),
+
+-- posição relativa de cada cluster por dimensão: 0 = melhor, 1 = pior,
+-- normalizada pelo número de clusters (k) em vez de um rank fixo
+tiered_clusters as (
+    select
+        rc.cluster_id as cluster_id,
+        (rc.recency_rank - 1) / greatest(cc.k - 1, 1) as recency_pct,
+        (rc.frequency_rank - 1) / greatest(cc.k - 1, 1) as frequency_pct,
+        (rc.monetary_rank - 1) / greatest(cc.k - 1, 1) as monetary_pct
+    from ranked_clusters rc
+    cross join cluster_count cc
+),
+
+rfm_tiers as (
+    select
         cluster_id,
-        dense_rank() over (order by avg_net_revenue desc) as value_rank
-    from cluster_stats
+        case when recency_pct < 0.34 then 'high' when recency_pct < 0.67 then 'mid' else 'low' end as recency_tier,
+        case when frequency_pct < 0.34 then 'high' when frequency_pct < 0.67 then 'mid' else 'low' end as frequency_tier,
+        case when monetary_pct < 0.34 then 'high' when monetary_pct < 0.67 then 'mid' else 'low' end as monetary_tier
+    from tiered_clusters
 ),
 
 labeled_clusters as (
     select
-        rc.cluster_id as cluster_id,
-        ['Champions', 'Loyal', 'Promising', 'At Risk', 'Hibernating', 'Lost'][
-            least(6, 1 + cast(floor((rc.value_rank - 1) * 6.0 / cc.k) as integer))
-        ] as segment_label
-    from ranked_clusters rc
-    cross join cluster_count cc
+        cluster_id,
+        case
+            when recency_tier = 'high' and frequency_tier = 'high' and monetary_tier = 'high' then 'Champions'
+            when frequency_tier = 'high' and monetary_tier in ('high', 'mid') then 'Loyal'
+            when recency_tier = 'low' and (frequency_tier in ('high', 'mid') or monetary_tier in ('high', 'mid')) then 'At Risk'
+            when recency_tier = 'high' then 'Promising'
+            when recency_tier = 'low' and frequency_tier = 'low' and monetary_tier = 'low' then 'Lost'
+            else 'Hibernating'
+        end as segment_label
+    from rfm_tiers
 ),
 
 tiers as (

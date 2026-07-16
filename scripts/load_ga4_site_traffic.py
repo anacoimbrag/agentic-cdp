@@ -134,7 +134,7 @@ def main() -> int:
         rows = aggregate_file(f)
         if rows:
             client.insert(TABLE, rows, column_names=COLUMNS)
-        if (i + 1) % 50 == 0 or i == len(files) - 1:
+        if (i + 1) % 10 == 0 or i == len(files) - 1:
             total = client.query(
                 f"SELECT count(*), sum(sessions), sum(cart_sessions), sum(purchasing_sessions) FROM {TABLE}"
             ).result_rows[0]

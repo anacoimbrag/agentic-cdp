@@ -15,39 +15,42 @@ e gravam o resultado cru em `raw.*` — quem rotula/rankeia/combina é dbt.
 `raw.campaign_propensity`), e o Python lê as views de
 `transform/models/feature/`. Isso exige rodar o `dbt build` em duas
 passagens — a segunda só depois que os scripts de treino já escreveram em
-`raw.*`:
+`raw.*`. `./stack.sh ml` (raiz do projeto) encadeia tudo isso:
 
 ```bash
-# 1. Materializa só as 4 feature views que os scripts de treino consomem
-#    (NÃO inclui feat_customer_segment_labels — essa depende de
-#    raw.customer_clusters, que só existe depois do passo 2).
-docker compose run --rm dbt build --select \
-    feat_rfm_features feat_promotion_engagement \
-    feat_campaign_training_data feat_customer_product_interactions
+./stack.sh data   # pré-requisito: staging/marts + as 4 feature views base já em raw/feature
+./stack.sh ml     # treino (training/segmentation, training/campaigns, training/recommendations) -> dbt build completo -> export
+./stack.sh ml-api  # sobe a ml-api (lê só output/serving_store.sqlite, nunca o ClickHouse)
+```
 
-# 2. Roda os 3 scripts de treino (cada um só lê a feature view e grava
+Por baixo dos panos, `./stack.sh ml` roda, na ordem:
+
+```bash
+# 1. (feito por ./stack.sh data) as 4 feature views que os scripts de treino
+#    consomem já foram materializadas — NÃO inclui feat_customer_segment_labels,
+#    que depende de raw.customer_clusters (só existe depois do passo 2 abaixo).
+
+# 2. os 3 scripts de treino (cada um só lê a feature view e grava
 #    UMA tabela crua em raw.*)
-docker compose run --rm ml-segmentation
-docker compose run --rm ml-campaigns
-docker compose run --rm ml-recommendations
+python ml/training/segmentation/train_kmeans.py
+python ml/training/campaigns/train_propensity.py
+python ml/training/recommendations/train_item_similarity.py
 
 # 3. dbt build completo — agora customer_profile.sql, customer_showcase.sql
 #    etc. conseguem ler raw.customer_clusters/campaign_propensity/product_similarity
-docker compose run --rm dbt build
+(cd transform && dbt build)
 
-# 4. Publica os resultados finais num SQLite de leitura pra API consumir
-docker compose run --rm ml-export
-
-# 5. Sobe a API (lê só output/serving_store.sqlite, nunca o ClickHouse)
-docker compose up -d ml-api
+# 4. publica os resultados finais num SQLite de leitura pra API consumir
+python ml/export_to_serving_store.py
 ```
 
-Passos 1–4 são o mesmo tipo de job one-shot que `dbt build` já é hoje — dá
-pra encadear num único script de cron, sem orquestrador novo.
+É o mesmo tipo de job one-shot que `dbt build` já é hoje — dá pra encadear
+num único script de cron, sem orquestrador novo (é exatamente o que
+`stack.sh` faz).
 
 ## Por que Python só treina
 
-Cada script em `ml/<caso_de_uso>/train_*.py` faz uma única coisa: ler uma
+Cada script em `ml/training/<caso_de_uso>/train_*.py` faz uma única coisa: ler uma
 feature view, rodar o algoritmo de ML, e escrever uma tabela crua em
 `raw.*` (mesmo padrão de `scripts/load_ga4_customer_behavior.py`). Toda
 rotulagem de negócio, ranking, fallback e combinação com outras tabelas
@@ -55,6 +58,6 @@ fica em SQL/dbt — mais fácil de auditar e testar (`dbt test`).
 
 | Caso de uso | Algoritmo | Script | Saída crua |
 |---|---|---|---|
-| Clusterização dinâmica | K-Means (k via silhouette) | `segmentation/train_kmeans.py` | `raw.customer_clusters` |
-| Próxima campanha | Regressão Logística por campanha | `campaigns/train_propensity.py` | `raw.campaign_propensity` |
-| Vitrine personalizada | Cosine similarity produto x produto | `recommendations/train_item_similarity.py` | `raw.product_similarity` |
+| Clusterização dinâmica | K-Means (k via silhouette) | `training/segmentation/train_kmeans.py` | `raw.customer_clusters` |
+| Próxima campanha | Regressão Logística por campanha | `training/campaigns/train_propensity.py` | `raw.campaign_propensity` |
+| Vitrine personalizada | Cosine similarity produto x produto | `training/recommendations/train_item_similarity.py` | `raw.product_similarity` |

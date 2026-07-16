@@ -172,7 +172,7 @@ def main() -> int:
         if rows:
             client.insert(FILTERED_TABLE, rows, column_names=FILTERED_COLUMNS)
             total_matched += len(rows)
-        if (i + 1) % 50 == 0 or i == len(files) - 1:
+        if (i + 1) % 10 == 0 or i == len(files) - 1:
             print(f"[{i + 1}/{len(files)}] {os.path.basename(f)}: "
                   f"{total_matched} matching rows so far", flush=True)
 
