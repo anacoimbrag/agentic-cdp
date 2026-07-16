@@ -15,7 +15,7 @@ models:
         tests: [not_null, unique]
       - name: cluster_id
         description: >
-          Cluster cru do K-Means (ml/training/segmentation/train_kmeans.py), nulo
+          Cluster cru do K-Means (../ecomm-ml/training/segmentation/train_kmeans.py), nulo
           para clientes sem histórico de compra.
       - name: segment_label
         description: >

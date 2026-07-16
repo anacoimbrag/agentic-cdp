@@ -1,7 +1,0 @@
-clickhouse-connect
-pytz
-scikit-learn
-numpy
-scipy
-fastapi
-uvicorn[standard]

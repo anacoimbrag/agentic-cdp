@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
 # Orquestra o stack nativo (sem Docker) do agentic-cdp: ClickHouse, meltano,
-# GA4 loaders, dbt e ml. Ver README.md para o setup inicial de cada venv
+# GA4 loaders e dbt. Ver README.md para o setup inicial de cada venv
 # (.venv-py, .venv-dbt, .venv-meltano) e do ClickHouse.
 #
 # O ecomm-data roda separado (../ecomm-data/stack.sh up/down) -- não é
-# gerenciado daqui, só precisa estar no ar antes de `./stack.sh data`.
+# gerenciado daqui, só precisa estar no ar antes de `./stack.sh data`. A
+# camada de ML também roda separado (../ecomm-ml/stack.sh ml/export/ml-api/
+# ml-web) -- ver ecomm-ml/README.md; entre `ml` (treino) e `export`, o
+# pipeline de lá exige rodar manualmente o `dbt build` deste projeto
+# (`./stack.sh data` cobre staging+marts; o `dbt build` completo com
+# activation/* é manual -- ver mensagem de erro do `ecomm-ml/stack.sh ml`).
 #
 # Uso:
 #   ./stack.sh up        # garante clickhouse no ar
 #   ./stack.sh data       # pipeline ETL/ELT: EL ecomm-data+GA4 -> raw -> dbt (staging+marts)
-#   ./stack.sh ml         # pipeline de ML: treino -> dbt (feature+activation) -> export
-#   ./stack.sh ml-api            # sobe a ml-api em background (:8000)
-#   ./stack.sh ml-web             # sobe o painel web da ml-api em background (:5173)
 #   ./stack.sh download-metabase # baixa metabase/metabase.jar (~500MB), uma vez
 #   ./stack.sh dashboard         # sobe o metabase em background (:3001)
-#   ./stack.sh down       # para clickhouse, ml-api, ml-web, metabase e ecomm-data (via ../ecomm-data/stack.sh down)
+#   ./stack.sh down       # para clickhouse, metabase, ecomm-data (via ../ecomm-data/stack.sh down) e ecomm-ml (via ../ecomm-ml/stack.sh down)
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
@@ -153,57 +155,6 @@ cmd_data() {
   log "pipeline de dados completo."
 }
 
-cmd_ml() {
-  start_clickhouse
-
-  log "ml: treino (segmentação, campanhas, recomendações)"
-  source .venv-py/bin/activate
-  python ml/training/segmentation/train_kmeans.py
-  python ml/training/campaigns/train_propensity.py
-  python ml/training/recommendations/train_item_similarity.py
-  deactivate
-
-  log "dbt build (completo: feat_customer_segment_labels + activation/*)"
-  source .venv-dbt/bin/activate
-  (cd transform && dbt build)
-  deactivate
-
-  log "ml: export para serving store"
-  source .venv-py/bin/activate
-  python ml/export_to_serving_store.py
-  deactivate
-
-  log "pipeline de ML completo."
-}
-
-cmd_ml_api() {
-  if curl -sf -m 2 "http://localhost:8000/health" >/dev/null 2>&1; then
-    log "ml-api: já rodando"
-    return
-  fi
-  log "ml-api: iniciando..."
-  source .venv-py/bin/activate
-  (cd ml && nohup uvicorn api.main:app --host 0.0.0.0 --port 8000 \
-    >"$ROOT/.stack-ml-api.log" 2>&1 & disown)
-  deactivate
-  wait_for "ml-api" "curl -sf -m 2 http://localhost:8000/health"
-}
-
-cmd_ml_web() {
-  if curl -sf -m 2 "http://localhost:5173" >/dev/null 2>&1; then
-    log "ml-web: já rodando"
-    return
-  fi
-  if [ ! -d "ml/web/node_modules" ]; then
-    log "ml-web: instalando dependências..."
-    (cd ml/web && npm install)
-  fi
-  log "ml-web: iniciando..."
-  (cd ml/web && nohup npm run dev -- --host \
-    >"$ROOT/.stack-ml-web.log" 2>&1 & disown)
-  wait_for "ml-web" "curl -sf -m 2 http://localhost:5173"
-}
-
 cmd_download_metabase() {
   if [ -f "$METABASE_JAR" ]; then
     log "metabase: jar já existe em $METABASE_JAR"
@@ -246,7 +197,7 @@ cmd_dashboard() {
 }
 
 cmd_down() {
-  for port_desc in "8000:ml-api" "5173:ml-web" "$METABASE_PORT:metabase" "${CLICKHOUSE_PORT}:clickhouse"; do
+  for port_desc in "$METABASE_PORT:metabase" "${CLICKHOUSE_PORT}:clickhouse"; do
     port="${port_desc%%:*}"; desc="${port_desc##*:}"
     pid=$(lsof -ti "tcp:$port" 2>/dev/null || true)
     if [ -n "$pid" ]; then
@@ -256,19 +207,17 @@ cmd_down() {
     fi
   done
   (cd ../ecomm-data && ./stack.sh down)
+  [ -x ../ecomm-ml/stack.sh ] && (cd ../ecomm-ml && ./stack.sh down)
 }
 
 case "${1:-}" in
   up) cmd_up ;;
   data) cmd_data ;;
-  ml) cmd_ml ;;
-  ml-api) cmd_ml_api ;;
-  ml-web) cmd_ml_web ;;
   download-metabase) cmd_download_metabase ;;
   dashboard) cmd_dashboard ;;
   down) cmd_down ;;
   *)
-    echo "Uso: $0 {up|data|ml|ml-api|ml-web|download-metabase|dashboard|down}" >&2
+    echo "Uso: $0 {up|data|download-metabase|dashboard|down}" >&2
     exit 1
     ;;
 esac

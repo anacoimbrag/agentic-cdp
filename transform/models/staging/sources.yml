@@ -14,7 +14,7 @@ sources:
       ga4_promotion_engagement também é gravada por
       scripts/load_ga4_customer_behavior.py (exposição a campanha por
       cliente). customer_clusters, campaign_propensity e product_similarity
-      são gravadas pelos scripts de treino em ml/ (saída crua dos modelos de
+      são gravadas pelos scripts de treino em ../ecomm-ml/training/ (saída crua dos modelos de
       ML, consumida pelos models de activation/).
     tables:
       - name: categories

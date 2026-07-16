@@ -93,69 +93,9 @@ services:
     volumes:
       - ./transform:/app
 
-  # Camada de ML (ver ml/README.md pra ordem completa de execução do
-  # pipeline batch). Cada serviço abaixo é um passo one-shot, igual ao
-  # `dbt` acima — não roda como processo de longa duração.
-  ml-segmentation:
-    build: ./ml
-    environment:
-      - CLICKHOUSE_HOST=clickhouse
-      - CLICKHOUSE_PORT=8123
-      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
-      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-}
-    depends_on:
-      clickhouse:
-        condition: service_healthy
-
-  ml-campaigns:
-    build: ./ml
-    command: ["python", "campaigns/train_propensity.py"]
-    environment:
-      - CLICKHOUSE_HOST=clickhouse
-      - CLICKHOUSE_PORT=8123
-      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
-      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-}
-    depends_on:
-      clickhouse:
-        condition: service_healthy
-
-  ml-recommendations:
-    build: ./ml
-    command: ["python", "recommendations/train_item_similarity.py"]
-    environment:
-      - CLICKHOUSE_HOST=clickhouse
-      - CLICKHOUSE_PORT=8123
-      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
-      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-}
-    depends_on:
-      clickhouse:
-        condition: service_healthy
-
-  ml-export:
-    build: ./ml
-    command: ["python", "export_to_serving_store.py"]
-    environment:
-      - CLICKHOUSE_HOST=clickhouse
-      - CLICKHOUSE_PORT=8123
-      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
-      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-}
-      - SERVING_STORE_PATH=/output/serving_store.sqlite
-    depends_on:
-      clickhouse:
-        condition: service_healthy
-    volumes:
-      - ./output:/output
-
-  ml-api:
-    build:
-      context: ./ml
-      dockerfile: api/Dockerfile
-    ports:
-      - "8000:8000"
-    environment:
-      - SERVING_STORE_PATH=/output/serving_store.sqlite
-    volumes:
-      - ./output:/output:ro
+  # Camada de ML: projeto irmão ../ecomm-ml (ver ecomm-ml/README.md), fora
+  # deste compose -- conecta neste ClickHouse pela rede externa
+  # "cdp-shared-net" (ver ecomm-ml/docker-compose.yml).
 
 networks:
   cdp-shared-net:

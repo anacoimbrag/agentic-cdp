@@ -21,9 +21,10 @@ abaixo.
 
 - `meltano.yml` — configuração dos plugins e do job de extração/carga (EL).
 - `stack.sh` — sobe/derruba tudo: ClickHouse nativo, pipeline de dados
-  (meltano + GA4 + dbt), pipeline de ML (treino + dbt + export), além de
-  `ml-api` e `dashboard` (Metabase) como comandos separados. O `ecomm-data`
-  roda à parte via `../ecomm-data/stack.sh`.
+  (meltano + GA4 + dbt) e `dashboard` (Metabase) como comando separado. O
+  `ecomm-data` roda à parte via `../ecomm-data/stack.sh`, e a camada de ML
+  roda à parte via `../ecomm-ml/stack.sh` (entre o treino e o export de lá,
+  é preciso rodar manualmente o `dbt build` deste projeto).
 - `scripts/load_ga4_customer_behavior.py` e `scripts/load_ga4_site_traffic.py`
   — leem os arquivos de export do GA4 (`../ga4_bigquery_export/events/*.json.gz`)
   em paralelo (tabelas e cursors incrementais disjuntos, sem contenção): o
@@ -32,8 +33,8 @@ abaixo.
   visitantes em `raw.ga4_site_traffic`.
 - `transform/` — projeto dbt (`dbt-clickhouse`): modelos `staging` alimentam
   os modelos `marts`.
-- ML (segmentação, próxima campanha, vitrine personalizada): ver
-  [ml/README.md](ml/README.md).
+- ML (segmentação, próxima campanha, vitrine personalizada): projeto irmão
+  [ecomm-ml](../ecomm-ml), ver [ecomm-ml/README.md](../ecomm-ml/README.md).
 - O warehouse ClickHouse persiste em
   `${XDG_DATA_HOME:-~/.local/share}/clickhouse-agentic-cdp/data/` (fora do
   repo).
@@ -77,11 +78,13 @@ configurada) antes do primeiro run.
 (cd ../ecomm-data && ./stack.sh up)  # fonte de dados que o meltano extrai (ver README do projeto)
 ./stack.sh up                         # garante o ClickHouse no ar
 ./stack.sh data                       # meltano (ecomm-data -> raw) + GA4 (comportamento + tráfego, em paralelo) -> dbt build (staging + marts)
-./stack.sh ml                         # treino de ML -> dbt build completo (+ activation/*) -> export pro serving store
+(cd ../ecomm-ml && ./stack.sh ml)     # treino de ML (para com erro pedindo o dbt build abaixo)
+source .venv-dbt/bin/activate && (cd transform && dbt build) && deactivate  # completo (+ activation/*), pré-requisito do export
+(cd ../ecomm-ml && ./stack.sh export) # publica activation/* no serving store
 ```
 
-`./stack.sh down` para o ClickHouse, o `ecomm-data` (via
-`../ecomm-data/stack.sh down`), o `ml-api` e o Metabase.
+`./stack.sh down` para o ClickHouse, o Metabase, o `ecomm-data` (via
+`../ecomm-data/stack.sh down`) e o `ecomm-ml` (via `../ecomm-ml/stack.sh down`).
 
 Pra rodar dbt manualmente (outros subcomandos além de `build`, por exemplo
 gerar documentação):
@@ -94,8 +97,8 @@ python3 -m http.server --directory target 8080   # abrir http://localhost:8080
 ```
 
 Camada de ML (segmentação, próxima campanha, vitrine personalizada): ver
-[ml/README.md](ml/README.md) pra entender o que `./stack.sh ml` roda por
-baixo dos panos.
+[ecomm-ml/README.md](../ecomm-ml/README.md) pra entender a ordem completa
+`ml` (treino) → `dbt build` (manual, aqui) → `export`.
 
 ## Inspecionar o resultado
 
