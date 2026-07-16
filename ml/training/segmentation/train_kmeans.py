@@ -11,8 +11,8 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
-# permite `from common.db import ...` quando o script roda direto (python segmentation/train_kmeans.py)
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# permite `from common.db import ...` quando o script roda direto (python training/segmentation/train_kmeans.py)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from common.db import connect, fetch_dicts, replace_table  # noqa: E402
 
 K_MIN = int(os.environ.get("KMEANS_K_MIN", "3"))

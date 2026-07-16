@@ -1,5 +1,5 @@
 {{ config(order_by=['customer_id', 'promotion_id']) }}
--- Feature/label view para ml/campaigns/train_propensity.py. Grão: 1 linha
+-- Feature/label view para ml/training/campaigns/train_propensity.py. Grão: 1 linha
 -- por (customer_id, promotion_id) com exposição registrada (view/select de
 -- promoção no GA4). O rótulo `converted` vem do uso real do cupom em
 -- fct_order_line — não depende de activation.customer_profile (evita ciclo,

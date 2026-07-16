@@ -10,7 +10,7 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from sklearn.metrics.pairwise import cosine_similarity
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from common.db import connect, fetch_dicts, replace_table  # noqa: E402
 
 TOP_K = int(os.environ.get("SIMILARITY_TOP_K", "10"))

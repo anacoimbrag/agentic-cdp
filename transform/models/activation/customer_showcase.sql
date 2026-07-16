@@ -1,7 +1,7 @@
 {{ config(order_by=['customer_id', 'rank']) }}
 -- Vitrine inteligente personalizada (caso de uso 3): top-12 produtos por
 -- cliente, combinando 3 sinais em SQL puro (regra de scoring do plano):
--- 1) similaridade de produto (ml/recommendations/train_item_similarity.py),
+-- 1) similaridade de produto (ml/training/recommendations/train_item_similarity.py),
 --    com decaimento por recência da compra original (meia-vida ~90 dias);
 -- 2) cesta de compra (product_affinity, lift normalizado 0-1 via x/(1+x));
 -- 3) fallback content-based por categoria/marca favorita (cold start),

@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from common.db import connect, fetch_dicts, replace_table  # noqa: E402
 
 MIN_SAMPLES_PER_CAMPAIGN = int(os.environ.get("PROPENSITY_MIN_SAMPLES", "20"))

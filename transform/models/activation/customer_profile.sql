@@ -59,7 +59,7 @@ behavior as (
     select * from {{ ref('stg_ga4_customer_behavior') }}
 ),
 
--- Segmento/tier calculados por ml/segmentation/train_kmeans.py + rotulados
+-- Segmento/tier calculados por ml/training/segmentation/train_kmeans.py + rotulados
 -- em feat_customer_segment_labels.sql (caso de uso 1: clusterização
 -- dinâmica). Clientes sem histórico de compra não entram no K-Means, então
 -- ficam sem cluster_id/segment_label — tratados como 'no_purchase' abaixo.
@@ -68,7 +68,7 @@ segments as (
 ),
 
 -- Próxima campanha sugerida (caso de uso 2), em 4 camadas de prioridade:
--- 1) modelo de propensão (ml/campaigns/train_propensity.py) quando o
+-- 1) modelo de propensão (ml/training/campaigns/train_propensity.py) quando o
 --    cliente tem exposição registrada; 2) conversão histórica do segmento
 --    do cliente; 3) conversão histórica geral; 4) promoção ativa mais
 --    recente, como último recurso.

@@ -3,8 +3,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY common ./common
-COPY segmentation ./segmentation
-COPY campaigns ./campaigns
-COPY recommendations ./recommendations
+COPY training ./training
 COPY export_to_serving_store.py .
-CMD ["python", "segmentation/train_kmeans.py"]
+CMD ["python", "training/segmentation/train_kmeans.py"]

@@ -7,6 +7,11 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+class CustomerSummary(BaseModel):
+    customer_id: str
+    full_name: Optional[str] = None
+
+
 class SegmentResponse(BaseModel):
     customer_id: str
     cluster_id: Optional[int] = None
@@ -33,6 +38,9 @@ class ShowcaseItem(BaseModel):
     rank: int
     product_id: str
     sku_id: Optional[str] = None
+    product_name: Optional[str] = None
+    price: Optional[float] = None
+    image_url: Optional[str] = None
     reason: str
     score: float
 

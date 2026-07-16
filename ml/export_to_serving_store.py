@@ -19,16 +19,20 @@ from common.db import connect  # noqa: E402
 SQLITE_PATH = os.environ.get("SERVING_STORE_PATH", "/output/serving_store.sqlite")
 
 CUSTOMER_PROFILE_COLUMNS = [
-    "customer_id", "cluster_id", "segment_label", "tier", "segmented_at",
+    "customer_id", "full_name", "cluster_id", "segment_label", "tier", "segmented_at",
     "next_best_promotion_id", "next_best_promotion_name",
     "next_best_campaign_score", "next_best_campaign_reason", "campaign_scored_at",
 ]
 CUSTOMER_SHOWCASE_COLUMNS = [
     "customer_id", "rank", "product_id", "sku_id", "reason", "score", "computed_at",
 ]
+PRODUCT_COLUMNS = ["sku_id", "sku_name", "selling_price", "image_url"]
 
 
-def export_table(ch_client, sqlite_con, source_table: str, columns: list[str], dest_table: str) -> int:
+def export_table(
+    ch_client, sqlite_con, source_table: str, columns: list[str], dest_table: str,
+    index_column: str = "customer_id",
+) -> int:
     rows = ch_client.query(f"SELECT {', '.join(columns)} FROM {source_table}").result_rows
 
     placeholders = ", ".join(columns)
@@ -37,7 +41,7 @@ def export_table(ch_client, sqlite_con, source_table: str, columns: list[str], d
     sqlite_con.executemany(
         f"INSERT INTO {dest_table} VALUES ({', '.join('?' for _ in columns)})", rows
     )
-    sqlite_con.execute(f"CREATE INDEX idx_{dest_table}_customer_id ON {dest_table} (customer_id)")
+    sqlite_con.execute(f"CREATE INDEX idx_{dest_table}_{index_column} ON {dest_table} ({index_column})")
     return len(rows)
 
 
@@ -57,12 +61,16 @@ def main() -> int:
         ch_client, sqlite_con, "activation.customer_showcase",
         CUSTOMER_SHOWCASE_COLUMNS, "customer_showcase",
     )
+    n_products = export_table(
+        ch_client, sqlite_con, "marts.dim_products",
+        PRODUCT_COLUMNS, "products", index_column="sku_id",
+    )
 
     sqlite_con.commit()
     sqlite_con.close()
 
     print(f"Done. {SQLITE_PATH}: customer_profile={n_profiles} linhas, "
-          f"customer_showcase={n_showcase} linhas.", flush=True)
+          f"customer_showcase={n_showcase} linhas, products={n_products} linhas.", flush=True)
     return 0
 
 

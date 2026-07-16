@@ -1,5 +1,5 @@
 {{ config(order_by=['customer_id']) }}
--- Feature view para ml/segmentation/train_kmeans.py. Recalcula RFM direto das
+-- Feature view para ml/training/segmentation/train_kmeans.py. Recalcula RFM direto das
 -- staging sources (não a partir de activation.customer_profile) para não
 -- criar uma dependência circular entre o model que consome o output do
 -- K-Means e o model que alimenta o treino.

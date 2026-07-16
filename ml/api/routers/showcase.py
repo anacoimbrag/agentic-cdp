@@ -13,10 +13,19 @@ def get_customer_showcase(
     with get_connection() as con:
         rows = con.execute(
             """
-            SELECT rank, product_id, sku_id, reason, score
-            FROM customer_showcase
-            WHERE customer_id = ?
-            ORDER BY rank
+            SELECT
+                cs.rank AS rank,
+                cs.product_id AS product_id,
+                cs.sku_id AS sku_id,
+                p.sku_name AS product_name,
+                p.selling_price AS price,
+                p.image_url AS image_url,
+                cs.reason AS reason,
+                cs.score AS score
+            FROM customer_showcase cs
+            LEFT JOIN products p ON cs.sku_id = p.sku_id
+            WHERE cs.customer_id = ?
+            ORDER BY cs.rank
             LIMIT ?
             """,
             (customer_id, limit),

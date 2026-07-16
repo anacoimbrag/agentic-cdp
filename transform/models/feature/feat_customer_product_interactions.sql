@@ -1,5 +1,5 @@
 {{ config(order_by=['customer_id', 'product_id']) }}
--- Feature view para ml/recommendations/train_item_similarity.py: matriz
+-- Feature view para ml/training/recommendations/train_item_similarity.py: matriz
 -- implícita cliente x produto (grão: 1 linha por customer_id x product_id
 -- com interação). O peso vem só de compras reais (fct_order_line) — o
 -- comportamento do GA4 disponível hoje é agregado por categoria/marca

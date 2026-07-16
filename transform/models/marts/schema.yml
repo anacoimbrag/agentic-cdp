@@ -9,8 +9,8 @@ models:
 
   - name: dim_products
     description: >
-      Uma linha por SKU (variação de tamanho/cor), com os atributos do
-      produto-pai (nome, marca, categoria, preços) denormalizados em cada
+      Uma linha por SKU (variação de tamanho/cor): nome, imagem e preço do
+      SKU, mais brand_id/category_id do produto-pai denormalizados em cada
       SKU. Agrupe por `product_id` para voltar ao nível de produto-pai.
     columns:
       - name: sku_id
