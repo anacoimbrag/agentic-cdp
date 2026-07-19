@@ -117,6 +117,34 @@ require_ecomm_data() {
   fi
 }
 
+ensure_venv_meltano() {
+  [ -f .venv-meltano/bin/activate ] && return
+  log "venv: criando .venv-meltano"
+  python3.11 -m venv .venv-meltano
+  source .venv-meltano/bin/activate
+  pip install meltano
+  meltano install
+  deactivate
+}
+
+ensure_venv_py() {
+  [ -f .venv-py/bin/activate ] && return
+  log "venv: criando .venv-py"
+  python3.11 -m venv .venv-py
+  source .venv-py/bin/activate
+  pip install -r scripts/requirements.txt
+  deactivate
+}
+
+ensure_venv_dbt() {
+  [ -f .venv-dbt/bin/activate ] && return
+  log "venv: criando .venv-dbt"
+  python3.11 -m venv .venv-dbt
+  source .venv-dbt/bin/activate
+  pip install -r transform/requirements.txt
+  deactivate
+}
+
 cmd_up() {
   start_clickhouse
 }
@@ -124,6 +152,10 @@ cmd_up() {
 cmd_data() {
   start_clickhouse
   require_ecomm_data
+
+  ensure_venv_meltano
+  ensure_venv_py
+  ensure_venv_dbt
 
   log "meltano: EL ecommerce-synthetic-data -> raw"
   source .venv-meltano/bin/activate
