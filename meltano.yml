@@ -1,6 +1,6 @@
 version: 1
 default_environment: dev
-project_id: agentic-cdp
+project_id: ecommerce-data-pipeline
 
 environments:
   - name: dev

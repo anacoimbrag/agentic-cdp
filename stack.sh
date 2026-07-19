@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Orquestra o stack nativo (sem Docker) do agentic-cdp: ClickHouse, meltano,
+# Orquestra o stack nativo (sem Docker) do ecommerce-data-pipeline: ClickHouse, meltano,
 # GA4 loaders e dbt. Ver README.md para o setup inicial de cada venv
 # (.venv-py, .venv-dbt, .venv-meltano) e do ClickHouse.
 #
-# O ecomm-data roda separado (../ecomm-data/stack.sh up/down) -- não é
+# O ecommerce-synthetic-data roda separado (../ecommerce-synthetic-data/stack.sh up/down) -- não é
 # gerenciado daqui, só precisa estar no ar antes de `./stack.sh data`. A
 # camada de ML também roda separado (../ecomm-ml/stack.sh ml/export/ml-api/
 # ml-web) -- ver ecomm-ml/README.md; tem seu próprio projeto dbt
@@ -12,10 +12,10 @@
 #
 # Uso:
 #   ./stack.sh up        # garante clickhouse no ar
-#   ./stack.sh data       # pipeline ETL/ELT: EL ecomm-data+GA4 -> raw -> dbt (staging+marts)
+#   ./stack.sh data       # pipeline ETL/ELT: EL ecommerce-synthetic-data+GA4 -> raw -> dbt (staging+marts)
 #   ./stack.sh download-metabase # baixa metabase/metabase.jar (~500MB), uma vez
 #   ./stack.sh dashboard         # sobe o metabase em background (:3001)
-#   ./stack.sh down       # para clickhouse, metabase, ecomm-data (via ../ecomm-data/stack.sh down) e ecomm-ml (via ../ecomm-ml/stack.sh down)
+#   ./stack.sh down       # para clickhouse, metabase, ecommerce-synthetic-data (via ../ecommerce-synthetic-data/stack.sh down) e ecomm-ml (via ../ecomm-ml/stack.sh down)
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
@@ -24,7 +24,7 @@ set -a
 source .env
 set +a
 
-CH_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/clickhouse-agentic-cdp"
+CH_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/clickhouse-ecommerce-data-pipeline"
 CH_BIN="$(command -v clickhouse || echo "$HOME/.local/bin/clickhouse")"
 CH_CONFIG="$CH_HOME/config.xml"
 CH_LOG_DIR="$CH_HOME/logs"
@@ -111,8 +111,8 @@ start_clickhouse() {
 
 require_ecomm_data() {
   if ! curl -sf -m 2 "$ECOMM_DATA_API_URL/health" >/dev/null 2>&1; then
-    log "ecomm-data não está respondendo em $ECOMM_DATA_API_URL"
-    log "suba com: (cd /path/to/ecomm-data && ./stack.sh up)"
+    log "ecommerce-synthetic-data não está respondendo em $ECOMM_DATA_API_URL"
+    log "suba com: (cd /path/to/ecommerce-synthetic-data && ./stack.sh up)"
     exit 1
   fi
 }
@@ -125,7 +125,7 @@ cmd_data() {
   start_clickhouse
   require_ecomm_data
 
-  log "meltano: EL ecomm-data -> raw"
+  log "meltano: EL ecommerce-synthetic-data -> raw"
   source .venv-meltano/bin/activate
   meltano run el_ecomm_data
   deactivate
@@ -182,7 +182,7 @@ cmd_dashboard() {
   # manifests dos drivers embutidos, e essa URI quebra se o caminho tiver
   # espaço (caso de "$ROOT" aqui). Rodamos a partir de uma cópia em path
   # estável sem espaço.
-  local jar_cache="${XDG_DATA_HOME:-$HOME/.local/share}/agentic-cdp-metabase/metabase.jar"
+  local jar_cache="${XDG_DATA_HOME:-$HOME/.local/share}/ecommerce-data-pipeline-metabase/metabase.jar"
   mkdir -p "$(dirname "$jar_cache")"
   if [ ! -f "$jar_cache" ] || [ "$METABASE_JAR" -nt "$jar_cache" ]; then
     log "metabase: copiando jar para path sem espaço ($jar_cache)"
@@ -205,7 +205,7 @@ cmd_down() {
       log "$desc: não estava rodando"
     fi
   done
-  (cd ../ecomm-data && ./stack.sh down)
+  (cd ../ecommerce-synthetic-data && ./stack.sh down)
   [ -x ../ecomm-ml/stack.sh ] && (cd ../ecomm-ml && ./stack.sh down)
 }
 

@@ -1,9 +1,9 @@
-# agentic-cdp
+# ecommerce-data-pipeline
 
 Pipeline ELT (Meltano + dbt) que extrai dados do CDP e os transforma em um
 data warehouse ClickHouse, usado para BI e agentes.
 
-O fluxo é: **Meltano** extrai da API `ecomm-data` e do GA4 e carrega no schema
+O fluxo é: **Meltano** extrai da API `ecommerce-synthetic-data` e do GA4 e carrega no schema
 (database) `raw` do ClickHouse; **dbt** transforma `raw` em modelos `staging`
 (limpeza) e `marts` (as tabelas consultadas por dashboards e agentes).
 
@@ -22,7 +22,7 @@ abaixo.
 - `meltano.yml` — configuração dos plugins e do job de extração/carga (EL).
 - `stack.sh` — sobe/derruba tudo: ClickHouse nativo, pipeline de dados
   (meltano + GA4 + dbt) e `dashboard` (Metabase) como comando separado. O
-  `ecomm-data` roda à parte via `../ecomm-data/stack.sh`, e a camada de ML
+  `ecommerce-synthetic-data` roda à parte via `../ecommerce-synthetic-data/stack.sh`, e a camada de ML
   roda totalmente à parte via `../ecomm-ml/stack.sh` — projeto irmão
   independente, com seu próprio dbt (só depende de `staging`/`marts` já
   materializados aqui, lidos via `source()`; nada é chamado deste projeto
@@ -40,12 +40,12 @@ abaixo.
   campanha, vitrine personalizada) vivem no projeto irmão
   [ecomm-ml](../ecomm-ml), ver [ecomm-ml/README.md](../ecomm-ml/README.md).
 - O warehouse ClickHouse persiste em
-  `${XDG_DATA_HOME:-~/.local/share}/clickhouse-agentic-cdp/data/` (fora do
-  repo).
+  `${XDG_DATA_HOME:-~/.local/share}/clickhouse-ecommerce-data-pipeline/data/`
+  (fora do repo).
 
 ## Fontes → `raw` → marts
 
-| Fonte (ecomm-data / GA4)            | Tabela `raw`             | Modelos staging                                                           | Modelos marts |
+| Fonte (ecommerce-synthetic-data / GA4)            | Tabela `raw`             | Modelos staging                                                           | Modelos marts |
 |-------------------------------------|--------------------------|---------------------------------------------------------------------------|---------------|
 | `GET /categories`                   | `raw.categories`         | `stg_categories`                                                          | `dim_categories` |
 | `GET /promotions`                   | `raw.promotions`         | `stg_promotions`                                                          | `dim_promotions` |
@@ -63,14 +63,14 @@ link pra documentação de instalação:
 
 - **[Python 3.11](https://www.python.org/downloads/)** — usado pelas venvs `.venv-py`, `.venv-dbt` e `.venv-meltano` (não commitadas; ver `.gitignore`).
 - **[ClickHouse](https://clickhouse.com/docs/install)** — warehouse (client-server, suporta múltiplos writers concorrentes).
-- **[Node.js](https://nodejs.org/)** — necessário pro `ecomm-data` (ver README do projeto).
+- **[Node.js](https://nodejs.org/)** — necessário pro `ecommerce-synthetic-data` (ver README do projeto).
 - **[Java 11+](https://adoptium.net/)** — necessário pra rodar o [Metabase](https://www.metabase.com/docs/latest/) via `./stack.sh dashboard`/`download-metabase`.
 - **[Meltano](https://docs.meltano.com/getting-started/installation)** — instalado dentro da venv `.venv-meltano` (`pip install meltano` + `meltano install` pros plugins).
 - **[dbt-clickhouse](https://github.com/ClickHouse/dbt-clickhouse)** — instalado dentro da venv `.venv-dbt` via `transform/requirements.txt`.
 
 Depois de instaladas, `./stack.sh` cuida de subir/orquestrar tudo (ver
 abaixo) — dados/config do ClickHouse ficam em
-`${XDG_DATA_HOME:-~/.local/share}/clickhouse-agentic-cdp/`, mesma
+`${XDG_DATA_HOME:-~/.local/share}/clickhouse-ecommerce-data-pipeline/`, mesma
 convenção em qualquer SO. `cp .env.example .env` e ajuste
 `CLICKHOUSE_PASSWORD` (não pode ficar vazio — o driver HTTP usado pelo
 Meltano/dbt rejeita senha vazia mesmo pro usuário `default` sem senha
@@ -79,14 +79,14 @@ configurada) antes do primeiro run.
 ## Executar o pipeline
 
 ```bash
-(cd ../ecomm-data && ./stack.sh up)  # fonte de dados que o meltano extrai (ver README do projeto)
+(cd ../ecommerce-synthetic-data && ./stack.sh up)  # fonte de dados que o meltano extrai (ver README do projeto)
 ./stack.sh up                         # garante o ClickHouse no ar
-./stack.sh data                       # meltano (ecomm-data -> raw) + GA4 (comportamento + tráfego, em paralelo) -> dbt build (staging + marts)
+./stack.sh data                       # meltano (ecommerce-synthetic-data -> raw) + GA4 (comportamento + tráfego, em paralelo) -> dbt build (staging + marts)
 (cd ../ecomm-ml && ./stack.sh ml)     # pipeline de ML completo e independente: dbt build (feature) -> treino -> dbt build (completo) -> export
 ```
 
-`./stack.sh down` para o ClickHouse, o Metabase, o `ecomm-data` (via
-`../ecomm-data/stack.sh down`) e o `ecomm-ml` (via `../ecomm-ml/stack.sh down`).
+`./stack.sh down` para o ClickHouse, o Metabase, o `ecommerce-synthetic-data` (via
+`../ecommerce-synthetic-data/stack.sh down`) e o `ecomm-ml` (via `../ecomm-ml/stack.sh down`).
 
 Pra rodar dbt manualmente (outros subcomandos além de `build`, por exemplo
 gerar documentação):
@@ -127,7 +127,7 @@ anterior) e adicione uma conexão **ClickHouse**: host `localhost`, porta
 ClickHouse já vem embutido no jar oficial do Metabase — não precisa de
 plugin/JAR adicional.
 
-## Adicionar um endpoint do ecomm-data
+## Adicionar um endpoint do ecommerce-synthetic-data
 
 Adicione uma entrada em `extractors.tap-rest-api-msdk.config.streams` no
 `meltano.yml`: `name` (nome do stream/tabela), `path` (concatenado à

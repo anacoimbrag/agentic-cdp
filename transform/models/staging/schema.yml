@@ -47,7 +47,7 @@ models:
 
   - name: stg_customer_orders
     description: >
-      Uma linha por pedido, a partir da API de pedidos do ecomm-data. Traz
+      Uma linha por pedido, a partir da API de pedidos do ecommerce-synthetic-data. Traz
       valor, status, canal de venda, forma de pagamento e afiliado, e é a
       base para as métricas de compra do cliente.
     columns:
