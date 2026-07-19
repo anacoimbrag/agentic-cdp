@@ -1,7 +1,7 @@
 import subprocess
 from pathlib import Path
 
-from dagster import In, Nothing, job, op
+from dagster import job, multiprocess_executor, op
 
 # raiz do ecommerce-data-pipeline (pai deste pacote)
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -48,26 +48,24 @@ def orders_el_op() -> None:
     _run_in_venv(".venv-meltano", ["meltano", "run", "el_ecomm_orders"])
 
 
-@op(ins={"start": In(Nothing)})
+@op
 def ga4_customer_behavior_op() -> None:
     _run_in_venv(".venv-py", ["python", "scripts/load_ga4_customer_behavior.py"])
 
 
-@op(ins={"start": In(Nothing)})
+@op
 def ga4_site_traffic_op() -> None:
     _run_in_venv(".venv-py", ["python", "scripts/load_ga4_site_traffic.py"])
 
 
-@job
+@job(executor_def=multiprocess_executor)
 def el_job():
-    """Espelha `./stack.sh data` até o dbt: 6 streams ecomm (paralelo) -> GA4 (paralelo)."""
-    done = [
-        categories_el_op(),
-        promotions_el_op(),
-        affiliates_el_op(),
-        cdp_customer_profiles_el_op(),
-        products_el_op(),
-        orders_el_op(),
-    ]
-    ga4_customer_behavior_op(start=done)
-    ga4_site_traffic_op(start=done)
+    """Espelha `./stack.sh data` até o dbt: 6 streams ecomm + GA4, tudo em paralelo (sem dependência entre si -- gravam em tabelas raw.* disjuntas)."""
+    categories_el_op()
+    promotions_el_op()
+    affiliates_el_op()
+    cdp_customer_profiles_el_op()
+    products_el_op()
+    orders_el_op()
+    ga4_customer_behavior_op()
+    ga4_site_traffic_op()

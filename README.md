@@ -119,12 +119,12 @@ em `localhost:8123`/`:9000`, ou abra o Metabase em `http://localhost:3001`
 pipeline (status, duração, logs, linhagem) usamos o [Dagster](https://docs.dagster.io/)
 por cima do Meltano/dbt, sem substituí-los:
 
-- `el_job` — ops sequenciais/paralelos que rodam exatamente o que
-  `./stack.sh data` já roda até o dbt: as 6 streams do ecommerce-synthetic-data
-  em paralelo (`meltano run el_ecomm_categories`, `el_ecomm_promotions`,
-  `el_ecomm_affiliates`, `el_ecomm_profiles`, `el_ecomm_products`,
-  `el_ecomm_orders` — cada uma como um op separado, visível individualmente
-  na UI) e, em seguida, os dois loaders de GA4 em paralelo (via
+- `el_job` — 8 ops sem dependência entre si (todas gravam em tabelas `raw.*`
+  disjuntas), rodando em paralelo via `multiprocess_executor`: as 6 streams
+  do ecommerce-synthetic-data (`meltano run el_ecomm_categories`,
+  `el_ecomm_promotions`, `el_ecomm_affiliates`, `el_ecomm_profiles`,
+  `el_ecomm_products`, `el_ecomm_orders` — cada uma como um op separado,
+  visível individualmente na UI) e os dois loaders de GA4 (via
   `.venv-meltano` e `.venv-py`, respectivamente — mesmos binários, nada
   reinstalado). Todas as streams com primary key (`categories`, `promotions`,
   `affiliates`, `products`, `orders`) usam `load_method: upsert` +
