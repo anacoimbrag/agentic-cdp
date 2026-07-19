@@ -13,8 +13,11 @@
 # Uso:
 #   ./stack.sh up        # garante clickhouse no ar
 #   ./stack.sh data       # pipeline ETL/ELT: EL ecommerce-synthetic-data+GA4 -> raw -> dbt (staging+marts)
+#   ./stack.sh reset-data # dropa os databases raw e staging (pede confirmação), pra reiniciar o pipeline do zero
 #   ./stack.sh download-metabase # baixa metabase/metabase.jar (~500MB), uma vez
 #   ./stack.sh dashboard         # sobe o metabase em background (:3001)
+#   ./stack.sh backup-dashboard  # compacta metabase/data e envia pro Cloudflare R2 via wrangler (ver CLOUDFLARE_*/R2_BUCKET no .env)
+#   ./stack.sh restore-dashboard # baixa o snapshot mais recente do R2 via wrangler e substitui metabase/data local
 #   ./stack.sh down       # para clickhouse, metabase, ecommerce-synthetic-data (via ../ecommerce-synthetic-data/stack.sh down) e ecommerce-machine-learning (via ../ecommerce-machine-learning/stack.sh down)
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -186,6 +189,28 @@ cmd_data() {
   log "pipeline de dados completo."
 }
 
+cmd_reset_data() {
+  start_clickhouse
+  log "reset-data: isso vai APAGAR todos os dados em '${CLICKHOUSE_DATABASE}' e 'staging' (raw + staging)."
+  read -r -p "Confirma? [y/N] " confirm
+  if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+    log "reset-data: cancelado"
+    return
+  fi
+  for db in "${CLICKHOUSE_DATABASE}" staging; do
+    log "reset-data: dropando database '$db'"
+    curl -sf -u "${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}" \
+      --data-binary "DROP DATABASE IF EXISTS $db" \
+      "http://${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}/" >/dev/null
+  done
+  # meltano/GA4 esperam '${CLICKHOUSE_DATABASE}' já existente (mesmo hook de
+  # start_clickhouse na primeira subida).
+  curl -sf -u "${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}" \
+    --data-binary "CREATE DATABASE IF NOT EXISTS ${CLICKHOUSE_DATABASE}" \
+    "http://${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}/" >/dev/null
+  log "reset-data: concluído. Rode ./stack.sh data para reconstruir o pipeline do zero."
+}
+
 cmd_download_metabase() {
   if [ -f "$METABASE_JAR" ]; then
     log "metabase: jar já existe em $METABASE_JAR"
@@ -227,6 +252,70 @@ cmd_dashboard() {
   wait_for "metabase" "curl -sf -m 2 http://localhost:$METABASE_PORT"
 }
 
+ensure_wrangler() {
+  command -v wrangler >/dev/null 2>&1 && return
+  log "wrangler: não encontrado, instalando (npm install -g wrangler)"
+  npm install -g wrangler
+}
+
+require_r2_config() {
+  ensure_wrangler
+  : "${CLOUDFLARE_API_TOKEN:?defina CLOUDFLARE_API_TOKEN no .env (ver .env.example)}"
+  : "${CLOUDFLARE_ACCOUNT_ID:?defina CLOUDFLARE_ACCOUNT_ID no .env (ver .env.example)}"
+  : "${R2_BUCKET:?defina R2_BUCKET no .env (ver .env.example)}"
+}
+
+# wrangler (CLI nativo da Cloudflare) apontado pro bucket R2 via token,
+# credenciais isoladas via env (não depende de `wrangler login` interativo).
+r2_wrangler() {
+  CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
+  CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID" \
+    wrangler r2 object "$@" --remote
+}
+
+cmd_backup_dashboard() {
+  require_r2_config
+  if [ ! -d "$ROOT/metabase/data" ]; then
+    log "backup-dashboard: $ROOT/metabase/data não existe, nada para salvar"
+    exit 1
+  fi
+  local ts tmpdir archive
+  ts="$(date +%Y%m%d-%H%M%S)"
+  tmpdir="$(mktemp -d)"
+  archive="$tmpdir/metabase-backup.tar.gz"
+  log "backup-dashboard: compactando metabase/data"
+  tar -czf "$archive" -C "$ROOT/metabase" data
+  log "backup-dashboard: enviando pra r2://$R2_BUCKET/metabase-backups/ ($ts.tar.gz + latest.tar.gz)"
+  r2_wrangler put "$R2_BUCKET/metabase-backups/$ts.tar.gz" --file="$archive"
+  r2_wrangler put "$R2_BUCKET/metabase-backups/latest.tar.gz" --file="$archive"
+  rm -rf "$tmpdir"
+  log "backup-dashboard: concluído ($ts)"
+}
+
+cmd_restore_dashboard() {
+  require_r2_config
+  if curl -sf -m 2 "http://localhost:$METABASE_PORT" >/dev/null 2>&1; then
+    log "restore-dashboard: pare o metabase antes de restaurar (./stack.sh down)"
+    exit 1
+  fi
+  local tmpdir archive
+  tmpdir="$(mktemp -d)"
+  archive="$tmpdir/metabase-restore.tar.gz"
+  log "restore-dashboard: baixando r2://$R2_BUCKET/metabase-backups/latest.tar.gz"
+  r2_wrangler get "$R2_BUCKET/metabase-backups/latest.tar.gz" --file="$archive"
+  log "restore-dashboard: isso vai SOBRESCREVER $ROOT/metabase/data local."
+  read -r -p "Confirma? [y/N] " confirm
+  if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+    log "restore-dashboard: cancelado"
+    rm -rf "$tmpdir"
+    return
+  fi
+  rm -rf "$ROOT/metabase/data"
+  tar -xzf "$archive" -C "$ROOT/metabase"
+  rm -rf "$tmpdir"
+  log "restore-dashboard: concluído. Rode ./stack.sh dashboard para subir o metabase."
+}
+
 cmd_down() {
   for port_desc in "$METABASE_PORT:metabase" "${CLICKHOUSE_PORT}:clickhouse"; do
     port="${port_desc%%:*}"; desc="${port_desc##*:}"
@@ -244,11 +333,14 @@ cmd_down() {
 case "${1:-}" in
   up) cmd_up ;;
   data) cmd_data ;;
+  reset-data) cmd_reset_data ;;
   download-metabase) cmd_download_metabase ;;
   dashboard) cmd_dashboard ;;
+  backup-dashboard) cmd_backup_dashboard ;;
+  restore-dashboard) cmd_restore_dashboard ;;
   down) cmd_down ;;
   *)
-    echo "Uso: $0 {up|data|download-metabase|dashboard|down}" >&2
+    echo "Uso: $0 {up|data|reset-data|download-metabase|dashboard|backup-dashboard|restore-dashboard|down}" >&2
     exit 1
     ;;
 esac
