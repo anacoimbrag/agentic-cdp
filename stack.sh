@@ -240,6 +240,7 @@ cmd_dashboard() {
   if [ ! -f "$METABASE_JAR" ]; then
     log "metabase: jar não encontrado em $METABASE_JAR"
     cmd_download_metabase
+    cmd_restore_dashboard
     if [ ! -f "$METABASE_JAR" ]; then
       log "metabase: falha ao baixar jar"
       exit 1
