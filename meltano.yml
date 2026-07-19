@@ -38,6 +38,37 @@ plugins:
             path: /orders
             records_path: "$.orders[*]"
             primary_keys: [orderId]
+            # única stream com data por registro na API -> única com
+            # replication_key. IMPORTANTE: a API não aceita filtro por data
+            # (sem parâmetro `since`), então isso só faz o tap rastrear/expor
+            # o bookmark (`meltano state get`) -- ele continua reextraindo
+            # todas as páginas em toda run, não pula o que já foi visto. Quem
+            # de fato evita duplicata em raw.orders é o load_method: upsert
+            # do loader (abaixo), igual às demais streams com PK.
+            replication_key: creationDate
+            start_date: ${ECOMM_ORDERS_START_DATE}
+
+    # extractors herdados, um por stream (select restrito a uma stream cada),
+    # pra cada stream ter seu próprio job/state ID e aparecer separado no
+    # Dagster em vez de uma única extração "el_ecomm_data" monolítica.
+    - name: tap-ecomm-categories
+      inherit_from: tap-rest-api-msdk
+      select: ["categories.*"]
+    - name: tap-ecomm-promotions
+      inherit_from: tap-rest-api-msdk
+      select: ["promotions.*"]
+    - name: tap-ecomm-affiliates
+      inherit_from: tap-rest-api-msdk
+      select: ["affiliates.*"]
+    - name: tap-ecomm-profiles
+      inherit_from: tap-rest-api-msdk
+      select: ["cdp_customer_profiles.*"]
+    - name: tap-ecomm-products
+      inherit_from: tap-rest-api-msdk
+      select: ["products.*"]
+    - name: tap-ecomm-orders
+      inherit_from: tap-rest-api-msdk
+      select: ["orders.*"]
 
   loaders:
     - name: target-clickhouse
@@ -50,12 +81,69 @@ plugins:
         password: ${CLICKHOUSE_PASSWORD}
         database: ${CLICKHOUSE_DATABASE}
         default_target_schema: raw
-        # load_method default (append-only) já cobre o caso de
-        # cdp_customer_profiles, que não tem chave primária plana; a
-        # landing zone é append-only pra todas as streams, staging dedupe
-        # via row_number().
+        # append-only é o padrão-base, usado só por cdp_customer_profiles
+        # (sem chave primária plana -> dedupe fica no dbt, via row_number()).
+        # As demais streams usam os loaders herdados abaixo com
+        # load_method: upsert, gravando por primary key.
+
+    # engine_type: ReplacingMergeTree é obrigatório pro load_method: upsert
+    # de fato deduplicar -- um MergeTree comum (o padrão) não colapsa linhas
+    # repetidas na mesma order_by_keys, só ordena. optimize_after força um
+    # OPTIMIZE TABLE ... FINAL depois de cada carga pra já deixar a tabela
+    # raw sem duplicata (em vez de depender de merge em background).
+    - name: target-ecomm-categories
+      inherit_from: target-clickhouse
+      config:
+        load_method: upsert
+        engine_type: ReplacingMergeTree
+        order_by_keys: [id]
+        optimize_after: true
+    - name: target-ecomm-promotions
+      inherit_from: target-clickhouse
+      config:
+        load_method: upsert
+        engine_type: ReplacingMergeTree
+        order_by_keys: [name]
+        optimize_after: true
+    - name: target-ecomm-affiliates
+      inherit_from: target-clickhouse
+      config:
+        load_method: upsert
+        engine_type: ReplacingMergeTree
+        order_by_keys: [id]
+        optimize_after: true
+    - name: target-ecomm-products
+      inherit_from: target-clickhouse
+      config:
+        load_method: upsert
+        engine_type: ReplacingMergeTree
+        # target-clickhouse cria as colunas em lowercase (productId -> productid)
+        order_by_keys: [productid]
+        optimize_after: true
+    - name: target-ecomm-orders
+      inherit_from: target-clickhouse
+      config:
+        load_method: upsert
+        engine_type: ReplacingMergeTree
+        order_by_keys: [orderid]
+        optimize_after: true
 
 jobs:
-  - name: el_ecomm_data
+  - name: el_ecomm_categories
     tasks:
-      - tap-rest-api-msdk target-clickhouse
+      - tap-ecomm-categories target-ecomm-categories
+  - name: el_ecomm_promotions
+    tasks:
+      - tap-ecomm-promotions target-ecomm-promotions
+  - name: el_ecomm_affiliates
+    tasks:
+      - tap-ecomm-affiliates target-ecomm-affiliates
+  - name: el_ecomm_profiles
+    tasks:
+      - tap-ecomm-profiles target-clickhouse
+  - name: el_ecomm_products
+    tasks:
+      - tap-ecomm-products target-ecomm-products
+  - name: el_ecomm_orders
+    tasks:
+      - tap-ecomm-orders target-ecomm-orders

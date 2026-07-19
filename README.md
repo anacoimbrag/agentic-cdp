@@ -120,9 +120,21 @@ pipeline (status, duração, logs, linhagem) usamos o [Dagster](https://docs.dag
 por cima do Meltano/dbt, sem substituí-los:
 
 - `el_job` — ops sequenciais/paralelos que rodam exatamente o que
-  `./stack.sh data` já roda até o dbt: `meltano run el_ecomm_data` e, em
-  seguida, os dois loaders de GA4 em paralelo (via `.venv-meltano` e
-  `.venv-py`, respectivamente — mesmos binários, nada reinstalado).
+  `./stack.sh data` já roda até o dbt: as 6 streams do ecommerce-synthetic-data
+  em paralelo (`meltano run el_ecomm_categories`, `el_ecomm_promotions`,
+  `el_ecomm_affiliates`, `el_ecomm_profiles`, `el_ecomm_products`,
+  `el_ecomm_orders` — cada uma como um op separado, visível individualmente
+  na UI) e, em seguida, os dois loaders de GA4 em paralelo (via
+  `.venv-meltano` e `.venv-py`, respectivamente — mesmos binários, nada
+  reinstalado). Todas as streams com primary key (`categories`, `promotions`,
+  `affiliates`, `products`, `orders`) usam `load_method: upsert` +
+  `ReplacingMergeTree` no `target-clickhouse`, então cada run grava só o
+  que ainda não existia ou mudou, sem duplicar. `orders` também tem
+  `replication_key: creationDate` configurado (rastreia bookmark via
+  `meltano state get`), mas a API mock não aceita filtro por data — quem
+  evita duplicata em `raw.orders` na prática é o upsert, não o bookmark.
+  `cdp_customer_profiles` não tem chave primária plana e continua
+  append-only, com dedupe feito no dbt (`row_number()`).
 - `dbt_build_job` — os 23 models de `transform/` (staging + marts) como
   **assets nativos** (`@dbt_assets`), com linhagem visível entre eles na UI.
   Um sensor (`run_dbt_after_el`) dispara esse job automaticamente assim que

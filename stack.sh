@@ -172,7 +172,7 @@ cmd_data() {
 
   log "meltano: EL ecommerce-synthetic-data -> raw"
   source .venv-meltano/bin/activate
-  meltano run el_ecomm_data
+  meltano run el_ecomm_categories el_ecomm_promotions el_ecomm_affiliates el_ecomm_profiles el_ecomm_products el_ecomm_orders
   deactivate
 
   log "GA4: carga de comportamento e tráfego (em paralelo -- escrevem em tabelas raw.* e cursors incrementais disjuntos)"
