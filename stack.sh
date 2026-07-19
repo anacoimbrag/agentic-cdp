@@ -94,7 +94,7 @@ EOF
 
 start_clickhouse() {
   if curl -sf -m 2 "http://${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}/ping" >/dev/null 2>&1; then
-    log "clickhouse: já rodando"
+    log "clickhouse: rodando em :${CLICKHOUSE_PORT}"
     return
   fi
   ensure_clickhouse_config
@@ -167,7 +167,7 @@ cmd_download_metabase() {
 
 cmd_dashboard() {
   if curl -sf -m 2 "http://localhost:$METABASE_PORT" >/dev/null 2>&1; then
-    log "metabase: já rodando"
+    log "metabase: rodando em :$METABASE_PORT"
     return
   fi
   if [ ! -f "$METABASE_JAR" ]; then
