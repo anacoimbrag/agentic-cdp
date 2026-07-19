@@ -149,6 +149,15 @@ ensure_venv_dbt() {
   deactivate
 }
 
+ensure_venv_dagster() {
+  [ -f .venv-dagster/bin/activate ] && return
+  log "venv: criando .venv-dagster"
+  python3.11 -m venv .venv-dagster
+  source .venv-dagster/bin/activate
+  pip install -r dagster_project/requirements.txt
+  deactivate
+}
+
 cmd_up() {
   start_clickhouse
 }
@@ -318,6 +327,7 @@ cmd_restore_dashboard() {
 }
 
 cmd_dagster() {
+  ensure_venv_dagster
   export DAGSTER_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/dagster-ecommerce-data-pipeline"
   mkdir -p "$DAGSTER_HOME"
   log "dagster: UI em http://localhost:3002 (el_job = meltano+GA4, dbt_build_job dispara sozinho ao final via sensor)"
