@@ -8,11 +8,12 @@ from dagster import (
     Definitions,
     RunRequest,
     define_asset_job,
+    multiprocess_executor,
     run_status_sensor,
 )
 from dagster_dbt import DbtCliResource
 
-from .assets_dbt import transform_dbt_assets
+from .assets_dbt import gold_dbt_assets, transformation_dbt_assets
 from .ops_el import el_job
 from .project import dbt_project
 
@@ -32,7 +33,12 @@ def _load_dotenv() -> None:
 
 _load_dotenv()
 
-dbt_build_job = define_asset_job("dbt_build_job", selection=AssetSelection.all())
+dbt_build_job = define_asset_job(
+    "dbt_build_job",
+    selection=AssetSelection.all(),
+    # limita quantos processos dbt abrem conexão com o ClickHouse ao mesmo tempo
+    executor_def=multiprocess_executor.configured({"max_concurrent": 4}),
+)
 
 
 @run_status_sensor(
@@ -47,7 +53,7 @@ def run_dbt_after_el(context):
 
 
 defs = Definitions(
-    assets=[transform_dbt_assets],
+    assets=[*transformation_dbt_assets, *gold_dbt_assets],
     jobs=[el_job, dbt_build_job],
     sensors=[run_dbt_after_el],
     resources={

@@ -16,10 +16,16 @@ models:
       # fisicamente no banco, só funciona inline dentro do mesmo projeto dbt.
       +materialized: view
       +schema: staging
+      +meta:
+        dagster:
+          group: transformation
     marts:
       +materialized: table
       +schema: marts
       +engine: MergeTree
+      +meta:
+        dagster:
+          group: gold
 
 # Descarta o schema raw ao final de um build bem-sucedido. Desativado.
 # on-run-end:
