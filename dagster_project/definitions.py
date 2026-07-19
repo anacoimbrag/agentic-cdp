@@ -4,6 +4,7 @@ from pathlib import Path
 from dagster import (
     AssetSelection,
     DagsterRunStatus,
+    DefaultSensorStatus,
     Definitions,
     RunRequest,
     define_asset_job,
@@ -38,6 +39,7 @@ dbt_build_job = define_asset_job("dbt_build_job", selection=AssetSelection.all()
     run_status=DagsterRunStatus.SUCCESS,
     monitored_jobs=[el_job],
     request_job=dbt_build_job,
+    default_status=DefaultSensorStatus.RUNNING,
 )
 def run_dbt_after_el(context):
     """Dispara o dbt build assim que o el_job (meltano + GA4) termina com sucesso."""
