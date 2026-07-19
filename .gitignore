@@ -1,6 +1,7 @@
 .meltano/
 metabase/data/
 output/*.sqlite
+output/*.sql
 logs/
 *.log
 .env
@@ -21,3 +22,4 @@ dagster_project/dagster_home/
 metabase/metabase.jar
 .stack-*.log
 plugins/sample-database.sqlite
+*.DS_Store
