@@ -18,6 +18,7 @@
 #   ./stack.sh dashboard         # sobe o metabase em background (:3001)
 #   ./stack.sh backup-dashboard  # compacta metabase/data e envia pro Cloudflare R2 via wrangler (ver CLOUDFLARE_*/R2_BUCKET no .env)
 #   ./stack.sh restore-dashboard # baixa o snapshot mais recente do R2 via wrangler e substitui metabase/data local
+#   ./stack.sh dagster    # sobe a UI do Dagster em foreground (:3002) p/ acompanhar execução do pipeline
 #   ./stack.sh down       # para clickhouse, metabase, ecommerce-synthetic-data (via ../ecommerce-synthetic-data/stack.sh down) e ecommerce-machine-learning (via ../ecommerce-machine-learning/stack.sh down)
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -316,6 +317,14 @@ cmd_restore_dashboard() {
   log "restore-dashboard: concluído. Rode ./stack.sh dashboard para subir o metabase."
 }
 
+cmd_dagster() {
+  export DAGSTER_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/dagster-ecommerce-data-pipeline"
+  mkdir -p "$DAGSTER_HOME"
+  log "dagster: UI em http://localhost:3002 (el_job = meltano+GA4, dbt_build_job dispara sozinho ao final via sensor)"
+  source .venv-dagster/bin/activate
+  dagster dev -m dagster_project.definitions -p 3002
+}
+
 cmd_down() {
   for port_desc in "$METABASE_PORT:metabase" "${CLICKHOUSE_PORT}:clickhouse"; do
     port="${port_desc%%:*}"; desc="${port_desc##*:}"
@@ -338,9 +347,10 @@ case "${1:-}" in
   dashboard) cmd_dashboard ;;
   backup-dashboard) cmd_backup_dashboard ;;
   restore-dashboard) cmd_restore_dashboard ;;
+  dagster) cmd_dagster ;;
   down) cmd_down ;;
   *)
-    echo "Uso: $0 {up|data|reset-data|download-metabase|dashboard|backup-dashboard|restore-dashboard|down}" >&2
+    echo "Uso: $0 {up|data|reset-data|download-metabase|dashboard|backup-dashboard|restore-dashboard|dagster|down}" >&2
     exit 1
     ;;
 esac

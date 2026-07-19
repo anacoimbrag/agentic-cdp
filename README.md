@@ -67,6 +67,7 @@ link pra documentação de instalação:
 - **[Java 11+](https://adoptium.net/)** — necessário pra rodar o [Metabase](https://www.metabase.com/docs/latest/) via `./stack.sh dashboard`/`download-metabase`.
 - **[Meltano](https://docs.meltano.com/getting-started/installation)** — instalado dentro da venv `.venv-meltano` (`pip install meltano` + `meltano install` pros plugins).
 - **[dbt-clickhouse](https://github.com/ClickHouse/dbt-clickhouse)** — instalado dentro da venv `.venv-dbt` via `transform/requirements.txt`.
+- **[Dagster](https://docs.dagster.io/)** (opcional) — UI pra acompanhar a execução do pipeline; instalado dentro da venv `.venv-dagster` via `dagster_project/requirements.txt` (`python3.11 -m venv .venv-dagster && source .venv-dagster/bin/activate && pip install -r dagster_project/requirements.txt`). Ver [Acompanhar execução com Dagster](#acompanhar-execução-com-dagster) abaixo.
 
 Depois de instaladas, `./stack.sh` cuida de subir/orquestrar tudo (ver
 abaixo) — dados/config do ClickHouse ficam em
@@ -111,6 +112,29 @@ source .venv-dbt/bin/activate
 (ou `~/.local/bin/clickhouse client --user default --password ... ` direto
 em `localhost:8123`/`:9000`, ou abra o Metabase em `http://localhost:3001`
 — ver seção abaixo.)
+
+## Acompanhar execução com Dagster
+
+`meltano ui` está deprecated e não é mantido — pra acompanhar a execução do
+pipeline (status, duração, logs, linhagem) usamos o [Dagster](https://docs.dagster.io/)
+por cima do Meltano/dbt, sem substituí-los:
+
+- `el_job` — ops sequenciais/paralelos que rodam exatamente o que
+  `./stack.sh data` já roda até o dbt: `meltano run el_ecomm_data` e, em
+  seguida, os dois loaders de GA4 em paralelo (via `.venv-meltano` e
+  `.venv-py`, respectivamente — mesmos binários, nada reinstalado).
+- `dbt_build_job` — os 23 models de `transform/` (staging + marts) como
+  **assets nativos** (`@dbt_assets`), com linhagem visível entre eles na UI.
+  Um sensor (`run_dbt_after_el`) dispara esse job automaticamente assim que
+  o `el_job` termina com sucesso — não precisa rodar os dois manualmente.
+
+```bash
+./stack.sh dagster   # sobe a UI em http://localhost:3002 (foreground)
+```
+
+Na UI, rode o `el_job` (aba Jobs) — o `dbt_build_job` é disparado sozinho
+logo depois. Assets ficam na aba Assets, com o grafo de dependências
+staging → marts.
 
 ## BI com Metabase
 

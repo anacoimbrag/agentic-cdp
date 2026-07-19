@@ -16,6 +16,8 @@ transform/.user.yml
 .venv-py/
 .venv-dbt/
 .venv-meltano/
+.venv-dagster/
+dagster_project/dagster_home/
 metabase/metabase.jar
 .stack-*.log
 plugins/sample-database.sqlite

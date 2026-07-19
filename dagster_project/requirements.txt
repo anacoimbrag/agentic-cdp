@@ -1,0 +1,7 @@
+dagster
+dagster-webserver
+dagster-dbt
+# dbt-clickhouse também precisa estar nesta venv (não só na .venv-dbt): o
+# DbtProject/DbtCliResource do dagster-dbt resolve o binário `dbt` via PATH,
+# então precisa existir dentro da venv onde o `dagster dev` roda.
+dbt-clickhouse~=1.10.1
